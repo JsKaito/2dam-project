@@ -1,7 +1,31 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  void _login() {
+    final email = _emailController.text;
+    final password = _passwordController.text;
+
+    final success = AuthService().login(email, password);
+
+    if (success) {
+      Navigator.pushReplacementNamed(context, '/main');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Email o contraseña incorrectos")),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,12 +38,13 @@ class LoginScreen extends StatelessWidget {
             const Icon(Icons.palette, size: 80, color: Color(0xFF6C63FF)),
             const SizedBox(height: 24),
             const Text(
-              "Artist's Alley",
+              "Artist's Cottage",
               style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             ),
-            const Text("Welcome back!", style: TextStyle(color: Colors.grey)),
+            const Text("¡Bienvenido!", style: TextStyle(color: Colors.grey)),
             const SizedBox(height: 48),
             TextField(
+              controller: _emailController,
               decoration: InputDecoration(
                 hintText: 'Email',
                 prefixIcon: const Icon(Icons.email_outlined),
@@ -30,9 +55,10 @@ class LoginScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             TextField(
+              controller: _passwordController,
               obscureText: true,
               decoration: InputDecoration(
-                hintText: 'Password',
+                hintText: 'Contraseña',
                 prefixIcon: const Icon(Icons.lock_outline),
                 suffixIcon: const Icon(Icons.visibility_outlined),
                 filled: true,
@@ -44,7 +70,7 @@ class LoginScreen extends StatelessWidget {
             Row(
               children: [
                 Checkbox(value: false, onChanged: (v) {}),
-                const Text("Remember me"),
+                const Text("Recuérdame"),
               ],
             ),
             const SizedBox(height: 24),
@@ -52,23 +78,23 @@ class LoginScreen extends StatelessWidget {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: () => Navigator.pushReplacementNamed(context, '/main'),
+                onPressed: _login,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6C63FF),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text("Login", style: TextStyle(fontWeight: FontWeight.bold)),
+                child: const Text("Iniciar sesión", style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ),
             const SizedBox(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text("Don't have an account? "),
+                const Text("¿No tienes una cuenta? "),
                 GestureDetector(
                   onTap: () => Navigator.pushNamed(context, '/register'),
-                  child: const Text("Sign up", style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold)),
+                  child: const Text("Regístrate", style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold)),
                 ),
               ],
             ),

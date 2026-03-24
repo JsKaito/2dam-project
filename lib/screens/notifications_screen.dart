@@ -7,14 +7,14 @@ class NotificationsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Notifications", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("Notificaciones", style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
       body: ListView(
         children: [
-          _buildNotificationItem("Alex Sketch", "started following you", "24 days ago"),
-          _buildNotificationItem("María Acuarela", "started following you", "28 days ago"),
+          _buildNotificationItem("Alex Sketch", "ha empezado a seguirte", "Hace 24 días"),
+          _buildNotificationItem("María Acuarela", "ha empezado a seguirte", "Hace 28 días"),
         ],
       ),
     );

@@ -8,7 +8,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Artist's Alley", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("Artist's Cottage", style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
@@ -21,7 +21,7 @@ class HomeScreen extends StatelessWidget {
           PostCard(
             username: "Elena Abstracta",
             handle: "@abstract_vibes",
-            time: "a day ago",
+            time: "Hace 1 día",
             content: "Paisaje de montañas al óleo. 3 semanas de trabajo 🏔️ #OilPainting #Landscape",
             imageUrl: "https://picsum.photos/id/1015/600/400",
             likes: 7,
@@ -31,7 +31,7 @@ class HomeScreen extends StatelessWidget {
           PostCard(
             username: "Elena Abstracta",
             handle: "@abstract_vibes",
-            time: "4 days ago",
+            time: "Hace 4 días",
             content: "Tutorial: Cómo dibujar ojos expresivos. Guardad este post! 👁️ #Tutorial",
             imageUrl: "https://picsum.photos/id/1012/600/400",
             likes: 12,

@@ -7,13 +7,13 @@ class EditProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Edit Profile", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("Editar Perfil", style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Save", style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold, fontSize: 16)),
+            child: const Text("Guardar", style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold, fontSize: 16)),
           ),
         ],
       ),
@@ -41,18 +41,18 @@ class EditProfileScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 32),
-            _buildEditField("Username", "artista_luna", Icons.alternate_email),
+            _buildEditField("Usuario", "artista_luna", Icons.alternate_email),
             const SizedBox(height: 16),
-            _buildEditField("Display Name", "Luna García", Icons.person_outline),
+            _buildEditField("Nombre", "Luna García", Icons.person_outline),
             const SizedBox(height: 16),
             _buildEditField(
-              "Bio",
+              "Biografía",
               "🎨 Ilustradora digital | Amante del arte fantástico y surrealista | Comisiones abiertas ✨",
               Icons.info_outline,
               maxLines: 4,
             ),
             const SizedBox(height: 16),
-            _buildEditField("Phone (optional)", "", Icons.phone_outlined),
+            _buildEditField("Teléfono (opcional)", "", Icons.phone_outlined),
           ],
         ),
       ),

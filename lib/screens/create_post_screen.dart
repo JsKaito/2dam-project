@@ -7,13 +7,13 @@ class CreatePostScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Create Post", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("Crear Post", style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
           TextButton(
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Post published!")));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("¡Post publicado!")));
             },
             child: const Text("Post", style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold, fontSize: 16)),
           ),
@@ -32,7 +32,7 @@ class CreatePostScreen extends StatelessWidget {
               child: const TextField(
                 maxLines: 5,
                 decoration: InputDecoration(
-                  hintText: "What's on your mind? Share your art...",
+                  hintText: "¿Qué tienes en mente? Compártelo con todo el mundo...",
                   border: InputBorder.none,
                 ),
               ),
@@ -50,7 +50,7 @@ class CreatePostScreen extends StatelessWidget {
                 children: [
                   Icon(Icons.add_photo_alternate_outlined, size: 50, color: Colors.grey[400]),
                   const SizedBox(height: 8),
-                  Text("Add an image", style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.bold)),
+                  Text("Añadir una imagen", style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.bold)),
                 ],
               ),
             ),

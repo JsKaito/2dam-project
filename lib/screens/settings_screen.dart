@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -26,7 +27,7 @@ class SettingsScreen extends StatelessWidget {
                 const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("Artist's Alley", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    Text("Artist's Cottage", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                     Text("1.0.0", style: TextStyle(color: Colors.grey, fontSize: 12)),
                   ],
                 ),
@@ -34,7 +35,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             const Text(
-              "A social network for artists to share their work, follow each other, and interact.",
+              "Una red social para artistas, donde pueden compartir su trabajo, seguirse mutuamente e interactuar.",
               style: TextStyle(fontSize: 14),
             ),
             const SizedBox(height: 16),
@@ -43,11 +44,11 @@ class SettingsScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Developed by:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  Text("Desarrollado por:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   Text("• Fernando Ruiz Murciano", style: TextStyle(fontSize: 14)),
                   Text("• Lucía Jiménez Morales", style: TextStyle(fontSize: 14)),
                   SizedBox(height: 8),
-                  Text("For Albor Croft Jerez", style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
+                  Text("Para Albor Croft Jerez", style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
                 ],
               ),
             ),
@@ -55,8 +56,8 @@ class SettingsScreen extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(onPressed: () {}, child: const Text("View licenses", style: TextStyle(color: Color(0xFF6C63FF)))),
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close", style: TextStyle(color: Colors.white))),
+                TextButton(onPressed: () {}, child: const Text("Ver licencias", style: TextStyle(color: Color(0xFF6C63FF)))),
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cerrar", style: TextStyle(color: Colors.white))),
               ],
             )
           ],
@@ -69,32 +70,35 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Settings", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("Ajustes", style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
       body: ListView(
         children: [
-          _buildSectionHeader("Account"),
-          _buildSettingItem(Icons.person_outline, "Edit Profile", () => Navigator.pushNamed(context, '/edit_profile')),
-          _buildSettingItem(Icons.lock_outline, "Change Password", () {}),
+          _buildSectionHeader("Cuenta"),
+          _buildSettingItem(Icons.person_outline, "Editar Perfil", () => Navigator.pushNamed(context, '/edit_profile')),
+          _buildSettingItem(Icons.lock_outline, "Cambiar contraseña", () {}),
           const Divider(color: Color(0xFF1E1E1E)),
           _buildSectionHeader("App"),
-          _buildSettingItem(Icons.notifications_none, "Notifications", () {}),
-          _buildSettingItem(Icons.palette_outlined, "Theme", () {}, subtitle: "System default"),
+          _buildSettingItem(Icons.notifications_none, "Notificaciones", () {}),
+          _buildSettingItem(Icons.palette_outlined, "Tema", () {}, subtitle: "Predeterminado del sistema"),
           const Divider(color: Color(0xFF1E1E1E)),
-          _buildSectionHeader("About"),
-          _buildSettingItem(Icons.info_outline, "About Artist's Alley", () => _showAboutDialog(context)),
-          _buildSettingItem(Icons.security, "Privacy Policy", () {}),
-          _buildSettingItem(Icons.description_outlined, "Terms of Service", () {}),
+          _buildSectionHeader("Sobre"),
+          _buildSettingItem(Icons.info_outline, "Sobre Artist's Cottage", () => _showAboutDialog(context)),
+          _buildSettingItem(Icons.security, "Política de Privacidad", () {}),
+          _buildSettingItem(Icons.description_outlined, "Términos de Servicio", () {}),
           const Divider(color: Color(0xFF1E1E1E)),
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.redAccent),
-            title: const Text("Log Out", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-            onTap: () => Navigator.pushReplacementNamed(context, '/login'),
+            title: const Text("Cerrar sesión", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+            onTap: () {
+              AuthService().logout(); // Limpiamos la sesión
+              Navigator.pushReplacementNamed(context, '/login');
+            },
           ),
           const SizedBox(height: 20),
-          const Center(child: Text("Artist's Alley v1.0.0", style: TextStyle(color: Colors.grey, fontSize: 12))),
+          const Center(child: Text("Artist's Cottage v1.0.0", style: TextStyle(color: Colors.grey, fontSize: 12))),
         ],
       ),
     );

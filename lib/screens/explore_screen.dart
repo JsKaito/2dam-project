@@ -8,7 +8,7 @@ class ExploreScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Explore", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("Explorar", style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
@@ -18,13 +18,13 @@ class ExploreScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: const [
-          Text("Trending Today", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          Text("En tendencia hoy", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           SizedBox(height: 16),
           PostCard(
             username: "Art Master",
             handle: "@art_master",
-            time: "2 hours ago",
-            content: "Check out this new landscape! 🎨",
+            time: "Hace 2 horas",
+            content: "¡Mira este nuevo paisaje! 🎨",
             imageUrl: "https://picsum.photos/id/1016/600/400",
             likes: 45,
             comments: 5,

@@ -58,15 +58,15 @@ class ProfileScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 _StatItem(label: "Posts", value: "1"),
-                _StatItem(label: "Followers", value: "6"),
-                _StatItem(label: "Following", value: "4"),
+                _StatItem(label: "Seguidores", value: "6"),
+                _StatItem(label: "Siguiendo", value: "4"),
               ],
             ),
             const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EditProfileScreen())),
               icon: const Icon(Icons.edit, size: 18),
-              label: const Text("Edit Profile"),
+              label: const Text("Editar Perfil"),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
                 side: const BorderSide(color: Colors.grey),
@@ -79,7 +79,7 @@ class ProfileScreen extends StatelessWidget {
               child: PostCard(
                 username: "Luna García",
                 handle: "@artista_luna",
-                time: "12 days ago",
+                time: "Hace 12 días",
                 content: "Experimentando con texturas en mi última pieza abstracta. El arte es libertad 🌈",
                 imageUrl: "https://picsum.photos/id/1018/600/400",
                 likes: 15,
