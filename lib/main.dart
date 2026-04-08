@@ -1,9 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'navigation_wrapper.dart';
+import 'services/notification_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // No inicializamos Firebase todavía para que no dé errores de compilación
+  // hasta que el usuario añada el google-services.json
+  // await Firebase.initializeApp();
+
+  final notificationService = NotificationService();
+  // await notificationService.initNotifications();
+
   runApp(const MyApp());
 }
 
@@ -26,7 +37,6 @@ class MyApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      // Iniciamos en Login
       initialRoute: '/login',
       routes: {
         '/login': (context) => const LoginScreen(),
