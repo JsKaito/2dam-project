@@ -43,8 +43,8 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
         showSelectedLabels: true,
         showUnselectedLabels: true,
         items: [
-          const BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Home'),
-          const BottomNavigationBarItem(icon: Icon(Icons.explore_outlined), label: 'Explore'),
+          const BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Inicio'),
+          const BottomNavigationBarItem(icon: Icon(Icons.explore_outlined), label: 'Explorar'),
           BottomNavigationBarItem(
             icon: Container(
               padding: const EdgeInsets.all(8),
@@ -56,8 +56,8 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
             ),
             label: '',
           ),
-          const BottomNavigationBarItem(icon: Icon(Icons.notifications_none), label: 'Notifications'),
-          const BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profile'),
+          const BottomNavigationBarItem(icon: Icon(Icons.notifications_none), label: 'Notificaciones'),
+          const BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Perfil'),
         ],
       ),
     );
