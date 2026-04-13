@@ -1,34 +1,46 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 class AuthService {
-  // Para acceder desde cualquier lugar
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
   AuthService._internal();
 
-  // Simulación de base de datos en memoria
-  final Map<String, String> _users = {}; 
+  final SupabaseClient _supabase = Supabase.instance.client;
 
-  // Usuario actualmente logueado
-  String? _currentUser;
-
-  bool register(String email, String password) {
-    if (email.isEmpty || password.isEmpty) return false;
-    if (_users.containsKey(email)) return false;
-    
-    _users[email] = password;
-    return true;
-  }
-
-  bool login(String email, String password) {
-    if (_users.containsKey(email) && _users[email] == password) {
-      _currentUser = email;
-      return true;
+  // Registrar un nuevo usuario en Supabase Auth
+  Future<bool> register(String email, String password, String username) async {
+    try {
+      final response = await _supabase.auth.signUp(
+        email: email,
+        password: password,
+        data: {'username': username}, // Metadatos opcionales
+      );
+      return response.user != null;
+    } catch (e) {
+      print("Error en registro Supabase: $e");
+      return false;
     }
-    return false;
   }
 
-  void logout() {
-    _currentUser = null;
+  // Iniciar sesión con Supabase Auth
+  Future<bool> login(String email, String password) async {
+    try {
+      final response = await _supabase.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+      return response.user != null;
+    } catch (e) {
+      print("Error en login Supabase: $e");
+      return false;
+    }
   }
 
-  String? get currentUser => _currentUser;
+  // Cerrar sesión
+  Future<void> logout() async {
+    await _supabase.auth.signOut();
+  }
+
+  // Obtener el usuario actual logueado
+  User? get currentUser => _supabase.auth.currentUser;
 }
