@@ -11,19 +11,24 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _isLoading = false;
 
-  void _login() {
+  Future<void> _login() async {
+    setState(() => _isLoading = true);
     final email = _emailController.text;
     final password = _passwordController.text;
 
-    final success = AuthService().login(email, password);
+    final success = await AuthService().login(email, password);
 
-    if (success) {
-      Navigator.pushReplacementNamed(context, '/main');
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Email o contraseña incorrectos")),
-      );
+    if (mounted) {
+      setState(() => _isLoading = false);
+      if (success) {
+        Navigator.pushReplacementNamed(context, '/main');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Email o contraseña incorrectos")),
+        );
+      }
     }
   }
 
@@ -66,25 +71,20 @@ class _LoginScreenState extends State<LoginScreen> {
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
               ),
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Checkbox(value: false, onChanged: (v) {}),
-                const Text("Recuérdame"),
-              ],
-            ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: _login,
+                onPressed: _isLoading ? null : _login,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6C63FF),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text("Iniciar sesión", style: TextStyle(fontWeight: FontWeight.bold)),
+                child: _isLoading 
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text("Iniciar sesión", style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ),
             const SizedBox(height: 24),

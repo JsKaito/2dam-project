@@ -1,19 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'navigation_wrapper.dart';
-import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // No inicializamos Firebase todavía para que no dé errores de compilación
-  // hasta que el usuario añada el google-services.json
-  // await Firebase.initializeApp();
 
-  final notificationService = NotificationService();
-  // await notificationService.initNotifications();
+  await Supabase.initialize(
+    url: 'https://yrbzkgfomjqilmyxzfqe.supabase.co',
+    anonKey: 'sb_publishable_btZL2OIyfvGSBnbbegPR5g_VyUN1Hz8',
+  );
 
   runApp(const MyApp());
 }
