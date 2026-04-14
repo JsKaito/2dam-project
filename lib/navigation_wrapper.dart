@@ -6,41 +6,69 @@ import 'screens/notifications_screen.dart';
 import 'screens/profile_screen.dart';
 
 class NavigationWrapper extends StatefulWidget {
-  const NavigationWrapper({super.key});
+  final int initialIndex;
+  const NavigationWrapper({super.key, this.initialIndex = 0});
 
   @override
   State<NavigationWrapper> createState() => _NavigationWrapperState();
 }
 
 class _NavigationWrapperState extends State<NavigationWrapper> {
-  int _selectedIndex = 0;
+  late int _selectedIndex;
 
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = widget.initialIndex;
+  }
+
+  // Las pantallas se mantienen en memoria para que no se pierdan al cambiar
   final List<Widget> _screens = [
     const HomeScreen(),
     const ExploreScreen(),
-    const CreatePostScreen(), // Mantenido para evitar errores si lo usas directamente
+    const SizedBox.shrink(), // Placeholder para el botón de '+'
     const NotificationsScreen(),
     const ProfileScreen(),
   ];
 
-  void _onItemTapped(int index) {
-    if (index == 2) {
-      // Botón central: Abrir modal de creación en lugar de cambiar de pantalla
-      _showCreatePostModal();
-    } else {
-      setState(() {
-        _selectedIndex = index;
-      });
+  void _onItemTapped(int index) {    if (index == 2) {
+    _showCreatePost();
+  } else {
+    // Definimos las rutas según el index
+    final Map<int, String> routes = {
+      0: '/home',
+      1: '/explore',
+      3: '/notifications',
+      4: '/profile',
+    };
+
+    if (routes.containsKey(index)) {
+      // Esto cambia la URL en el navegador
+      Navigator.pushReplacementNamed(context, routes[index]!);
     }
   }
+  }
 
-  void _showCreatePostModal() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => const CreatePostScreen(),
-    );
+  void _showCreatePost() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const CreatePostScreen()),
+    ).then((_) {
+      // Al volver de crear el post, refrescamos el estado si es necesario
+      setState(() {});
+    });
+  }
+
+  void _updateWebUrl(int index) {
+    final Map<int, String> routes = {
+      0: '/home',
+      1: '/explore',
+      3: '/notifications',
+      4: '/profile',
+    };
+    if (routes.containsKey(index)) {
+      // En una app real usaríamos GoRouter, aquí simulamos el cambio visual
+    }
   }
 
   @override
@@ -60,16 +88,8 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
         showSelectedLabels: false,
         showUnselectedLabels: false,
         items: [
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.home_filled),
-            activeIcon: Icon(Icons.home_filled, color: Color(0xFF6C63FF)),
-            label: 'Inicio',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.explore_outlined),
-            activeIcon: Icon(Icons.explore, color: Color(0xFF6C63FF)),
-            label: 'Explorar',
-          ),
+          const BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Home'),
+          const BottomNavigationBarItem(icon: Icon(Icons.explore_outlined), label: 'Explore'),
           BottomNavigationBarItem(
             icon: Container(
               padding: const EdgeInsets.all(8),
@@ -79,30 +99,10 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
               ),
               child: const Icon(Icons.add, color: Colors.white),
             ),
-            label: 'Crear',
+            label: 'Add',
           ),
-          const BottomNavigationBarItem(
-            icon: Stack(
-              children: [
-                Icon(Icons.notifications_none),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: CircleAvatar(
-                    radius: 4,
-                    backgroundColor: Colors.red,
-                  ),
-                ),
-              ],
-            ),
-            activeIcon: Icon(Icons.notifications, color: Color(0xFF6C63FF)),
-            label: 'Notificaciones',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person, color: Color(0xFF6C63FF)),
-            label: 'Perfil',
-          ),
+          const BottomNavigationBarItem(icon: Icon(Icons.notifications_none), label: 'Notifications'),
+          const BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profile'),
         ],
       ),
     );

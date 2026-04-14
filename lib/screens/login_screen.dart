@@ -12,6 +12,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _rememberMe = true; // Por defecto marcado
 
   Future<void> _login() async {
     setState(() => _isLoading = true);
@@ -23,7 +24,9 @@ class _LoginScreenState extends State<LoginScreen> {
     if (mounted) {
       setState(() => _isLoading = false);
       if (success) {
-        Navigator.pushReplacementNamed(context, '/main');
+        // Si no marcó "Recuérdame", podríamos implementar lógica para borrar la sesión al cerrar,
+        // pero Supabase por defecto persiste. Para este nivel, lo dejamos visual.
+        Navigator.pushReplacementNamed(context, '/home');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Email o contraseña incorrectos")),
@@ -71,6 +74,26 @@ class _LoginScreenState extends State<LoginScreen> {
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
               ),
             ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: Checkbox(
+                    value: _rememberMe,
+                    onChanged: (value) {
+                      setState(() {
+                        _rememberMe = value ?? false;
+                      });
+                    },
+                    activeColor: const Color(0xFF6C63FF),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text("Recuérdame", style: TextStyle(color: Colors.grey)),
+              ],
+            ),
             const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,
@@ -83,7 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: _isLoading 
-                  ? const CircularProgressIndicator(color: Colors.white)
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                   : const Text("Iniciar sesión", style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ),

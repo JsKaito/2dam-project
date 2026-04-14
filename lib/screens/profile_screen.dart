@@ -19,15 +19,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: FutureBuilder<Map<String, dynamic>?>(
-        future: _profileService.getCurrentProfile(),
+      body: StreamBuilder<Map<String, dynamic>>(
+        stream: _profileService.profileStream,
         builder: (context, profileSnapshot) {
           if (profileSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final profile = profileSnapshot.data;
-          final userId = profile?['id'];
+          if (!profileSnapshot.hasData) {
+            return const Center(child: Text("Error al cargar perfil"));
+          }
+
+          final profile = profileSnapshot.data!;
+          final userId = profile['id'];
+          final displayName = profile['display_name'] ?? profile['username'] ?? "Artista";
+          final username = profile['username'] ?? "user";
 
           return SingleChildScrollView(
             child: Column(
@@ -42,7 +48,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       color: const Color(0xFF6C63FF),
                       child: Center(
                         child: Text(
-                          profile?['username'] ?? "Artista",
+                          displayName,
                           style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                       ),
@@ -62,18 +68,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         backgroundColor: const Color(0xFF121212),
                         child: CircleAvatar(
                           radius: 50,
-                          backgroundImage: NetworkImage(profile?['avatar_url'] ?? "https://i.pravatar.cc/150?u=${profile?['id']}"),
+                          backgroundImage: profile['avatar_url'] != null 
+                              ? NetworkImage(profile['avatar_url']) 
+                              : const NetworkImage("https://i.pravatar.cc/150?u=user"),
                         ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 60),
-                Text("@${profile?['username'] ?? 'user'}", style: const TextStyle(color: Colors.grey)),
+                Text("@$username", style: const TextStyle(color: Colors.grey)),
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Text(
-                    profile?['bio'] ?? "Sin biografía todavía. ✨",
+                    profile['bio'] ?? "Sin biografía todavía. ✨",
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -82,21 +90,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   FutureBuilder<List<dynamic>>(
                     future: _postService.getUserPosts(userId),
                     builder: (context, postsSnapshot) {
-                      if (postsSnapshot.connectionState == ConnectionState.waiting) {
-                        return const CircularProgressIndicator();
-                      }
-                      
                       final posts = postsSnapshot.data ?? [];
                       
                       return Column(
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              _StatItem(label: "Posts", value: "${posts.length}"),
-                              const _StatItem(label: "Seguidores", value: "0"),
-                              const _StatItem(label: "Siguiendo", value: "0"),
-                            ],
+                          // Estadísticas centradas
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center, // Cambiado a center
+                              children: [
+                                _StatItem(label: "Posts", value: "${posts.length}"),
+                                const SizedBox(width: 40),
+                                const _StatItem(label: "Seguidores", value: "0"),
+                                const SizedBox(width: 40),
+                                const _StatItem(label: "Siguiendo", value: "0"),
+                              ],
+                            ),
                           ),
                           const SizedBox(height: 16),
                           OutlinedButton.icon(
@@ -120,8 +130,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 16),
                                 child: PostCard(
-                                  username: profile?['username'] ?? "Artista",
-                                  handle: "@${profile?['username']}",
+                                  username: displayName,
+                                  handle: "@$username",
                                   time: "Post propio",
                                   content: post['content'] ?? "",
                                   imageUrl: post['image_url'] ?? "",
