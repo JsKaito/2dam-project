@@ -7,8 +7,6 @@ import 'navigation_wrapper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // URL limpia sin '#'
   usePathUrlStrategy();
 
   await Supabase.initialize(
@@ -37,17 +35,34 @@ class MyApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      // Punto de entrada único
+      // Siempre arrancamos en AuthCheck
       home: const AuthCheck(),
       onGenerateRoute: (settings) {
+        // Obtenemos la sesión actual en el momento de navegar
+        final session = Supabase.instance.client.auth.currentSession;
+
         switch (settings.name) {
-          case '/login': return MaterialPageRoute(builder: (_) => const LoginScreen());
-          case '/register': return MaterialPageRoute(builder: (_) => const RegisterScreen());
-          case '/home': return MaterialPageRoute(builder: (_) => const NavigationWrapper(initialIndex: 0));
-          case '/explore': return MaterialPageRoute(builder: (_) => const NavigationWrapper(initialIndex: 1));
-          case '/notifications': return MaterialPageRoute(builder: (_) => const NavigationWrapper(initialIndex: 3));
-          case '/profile': return MaterialPageRoute(builder: (_) => const NavigationWrapper(initialIndex: 4));
-          default: return null;
+          case '/login':
+            return MaterialPageRoute(builder: (_) => const LoginScreen());
+          case '/register':
+            return MaterialPageRoute(builder: (_) => const RegisterScreen());
+          
+          // RUTAS PROTEGIDAS: Si no hay sesión, forzamos AuthCheck
+          case '/home':
+          case '/explore':
+          case '/notifications':
+          case '/profile':
+            if (session == null) {
+              return MaterialPageRoute(builder: (_) => const AuthCheck());
+            }
+            int index = 0;
+            if (settings.name == '/explore') index = 1;
+            if (settings.name == '/notifications') index = 3;
+            if (settings.name == '/profile') index = 4;
+            return MaterialPageRoute(builder: (_) => NavigationWrapper(initialIndex: index));
+            
+          default:
+            return MaterialPageRoute(builder: (_) => const AuthCheck());
         }
       },
     );
@@ -59,15 +74,15 @@ class AuthCheck extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Miramos si ya hay una sesión cargada en este instante
-    final initialSession = Supabase.instance.client.auth.currentSession;
-
-    // 2. Usamos el Stream para cambios futuros, pero con la sesión inicial ya puesta
     return StreamBuilder<AuthState>(
       stream: Supabase.instance.client.auth.onAuthStateChange,
       builder: (context, snapshot) {
-        // Si el stream aún no ha emitido pero tenemos sesión inicial, la usamos
-        final session = snapshot.hasData ? snapshot.data!.session : initialSession;
+        // Mientras el SDK recupera la sesión del navegador
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+
+        final session = snapshot.data?.session;
 
         if (session != null) {
           return const NavigationWrapper(initialIndex: 0);

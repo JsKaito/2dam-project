@@ -6,6 +6,7 @@ class PostCard extends StatelessWidget {
   final String time;
   final String content;
   final String imageUrl;
+  final String? profileImageUrl;
   final int likes;
   final int comments;
 
@@ -16,6 +17,7 @@ class PostCard extends StatelessWidget {
     required this.time,
     required this.content,
     required this.imageUrl,
+    this.profileImageUrl,
     required this.likes,
     required this.comments,
   });
@@ -33,8 +35,10 @@ class PostCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const CircleAvatar(
-                backgroundImage: NetworkImage("https://i.pravatar.cc/150?u=artist"),
+              CircleAvatar(
+                backgroundImage: profileImageUrl != null 
+                    ? NetworkImage(profileImageUrl!) 
+                    : const NetworkImage("https://i.pravatar.cc/150?u=artist"),
               ),
               const SizedBox(width: 12),
               Column(
@@ -48,11 +52,13 @@ class PostCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(content),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.network(imageUrl, fit: BoxFit.cover),
-          ),
+          if (imageUrl.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(imageUrl, fit: BoxFit.cover),
+            ),
+          ],
           const SizedBox(height: 12),
           Row(
             children: [
