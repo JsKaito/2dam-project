@@ -46,12 +46,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       height: 180,
                       width: double.infinity,
                       color: const Color(0xFF6C63FF),
-                      child: Center(
-                        child: Text(
-                          displayName,
-                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
-                      ),
                     ),
                     Positioned(
                       top: 40,
@@ -77,6 +71,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
                 const SizedBox(height: 60),
+                Text(
+                  displayName,
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                const SizedBox(height: 4),
                 Text("@$username", style: const TextStyle(color: Colors.grey)),
                 Padding(
                   padding: const EdgeInsets.all(16.0),
@@ -94,11 +93,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       
                       return Column(
                         children: [
-                          // Estadísticas centradas
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8.0),
                             child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center, // Cambiado a center
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 _StatItem(label: "Posts", value: "${posts.length}"),
                                 const SizedBox(width: 40),
