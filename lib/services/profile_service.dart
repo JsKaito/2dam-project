@@ -37,21 +37,22 @@ class ProfileService {
     }
   }
 
-  // Obtener perfil por username (@)
+  // Obtener perfil por username (@) - INSENSIBLE A MAYÚSCULAS
   Future<Map<String, dynamic>?> getProfileByUsername(String username) async {
     try {
-      return await _supabase
+      final cleanUsername = username.trim();
+      final res = await _supabase
           .from('profiles')
           .select('*')
-          .eq('username', username.toLowerCase())
-          .single();
+          .ilike('username', cleanUsername)
+          .maybeSingle();
+      return res;
     } catch (e) {
       print("Error obteniendo perfil por username: $e");
       return null;
     }
   }
 
-  // Búsqueda de usuarios con ranking de popularidad real
   Future<List<dynamic>> searchUsers(String query) async {
     try {
       var request = _supabase
@@ -94,12 +95,11 @@ class ProfileService {
   Future<bool> isUsernameAvailable(String username) async {
     if (username.isEmpty) return true;
     try {
-      final res = await _supabase.from('profiles').select('username').eq('username', username.trim().toLowerCase()).maybeSingle();
+      final res = await _supabase.from('profiles').select('username').ilike('username', username.trim()).maybeSingle();
       return res == null;
     } catch (e) { return false; }
   }
 
-  // --- SISTEMA SOCIAL ---
   Future<bool> isFollowing(String targetUserId) async {
     try {
       final currentUserId = _supabase.auth.currentUser?.id;

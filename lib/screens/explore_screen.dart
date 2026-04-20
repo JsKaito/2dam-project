@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../widgets/post_card.dart';
 import '../services/post_service.dart';
 import '../services/profile_service.dart';
+import 'user_profile_screen.dart';
 
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
@@ -21,7 +22,6 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
   @override
   void initState() {
     super.initState();
-    // Pestaña 0: Cuentas, Pestaña 1: Publicaciones
     _tabController = TabController(length: 2, vsync: this, initialIndex: 0);
   }
 
@@ -43,7 +43,6 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
       ),
       body: Column(
         children: [
-          // Buscador superior
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Container(
@@ -69,7 +68,6 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
               ),
             ),
           ),
-          // Selector de pestañas
           TabBar(
             controller: _tabController,
             indicatorColor: const Color(0xFF6C63FF),
@@ -81,7 +79,6 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
               Tab(text: "Publicaciones"),
             ],
           ),
-          // Contenido
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -153,16 +150,23 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
           itemCount: users.length,
           itemBuilder: (context, index) {
             final user = users[index];
+            final username = user['username'] ?? "";
+            
             return ListTile(
               leading: CircleAvatar(
                 backgroundImage: NetworkImage(user['avatar_url'] ?? ProfileService.defaultAvatarUrl),
               ),
-              title: Text(user['display_name'] ?? user['username'] ?? "Artista", style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text("@${user['username']}", style: const TextStyle(color: Colors.grey, fontSize: 13)),
+              title: Text(user['display_name'] ?? username, style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text("@$username", style: const TextStyle(color: Colors.grey, fontSize: 13)),
               trailing: const Icon(Icons.chevron_right, color: Colors.grey, size: 18),
               onTap: () {
-                // Enlace Real: Navegación por ruta nombrada para que cambie la URL
-                Navigator.pushNamed(context, '/user/${user['username']}');
+                // Navegación Directa para mayor fiabilidad
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => UserProfileScreen(username: username),
+                  ),
+                );
               },
             );
           },
