@@ -16,136 +16,141 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final ProfileService _profileService = ProfileService();
   final PostService _postService = PostService();
 
+  // Cargador unificado para evitar bucles de setState
+  Future<Map<String, dynamic>> _fetchProfileData(String userId) async {
+    final results = await Future.wait([
+      _profileService.getFollowCounts(userId),
+      _postService.getUserPosts(userId),
+      _profileService.getCurrentProfile(),
+    ]);
+
+    return {
+      'counts': results[0] as Map<String, int>,
+      'posts': results[1] as List<dynamic>,
+      'profile': results[2] as Map<String, dynamic>?,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: StreamBuilder<Map<String, dynamic>>(
         stream: _profileService.profileStream,
-        builder: (context, profileSnapshot) {
-          if (profileSnapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+        builder: (context, streamSnapshot) {
+          if (streamSnapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)));
           }
 
-          if (!profileSnapshot.hasData) {
-            return const Center(child: Text("Error al cargar perfil"));
+          final userData = streamSnapshot.data;
+          if (userData == null || userData.isEmpty) {
+            return const Center(child: Text("Inicia sesión para ver tu perfil"));
           }
 
-          final profile = profileSnapshot.data!;
-          final userId = profile['id'];
-          final displayName = profile['display_name'] ?? profile['username'] ?? "Artista";
-          final username = profile['username'] ?? "user";
+          final String userId = userData['id'];
 
-          return SingleChildScrollView(
-            child: Column(
-              children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  alignment: Alignment.center,
-                  children: [
-                    Container(
-                      height: 180,
-                      width: double.infinity,
-                      color: const Color(0xFF6C63FF),
-                    ),
-                    Positioned(
-                      top: 40,
-                      right: 16,
-                      child: IconButton(
-                        icon: const Icon(Icons.settings, color: Colors.white),
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen())),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: -50,
-                      child: CircleAvatar(
-                        radius: 55,
-                        backgroundColor: const Color(0xFF121212),
-                        child: CircleAvatar(
-                          radius: 50,
-                          backgroundImage: profile['avatar_url'] != null 
-                              ? NetworkImage(profile['avatar_url']) 
-                              : const NetworkImage("https://i.pravatar.cc/150?u=user"),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 60),
-                Text(
-                  displayName,
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-                ),
-                const SizedBox(height: 4),
-                Text("@$username", style: const TextStyle(color: Colors.grey)),
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    profile['bio'] ?? "Sin biografía todavía. ✨",
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                
-                if (userId != null)
-                  FutureBuilder<List<dynamic>>(
-                    future: _postService.getUserPosts(userId),
-                    builder: (context, postsSnapshot) {
-                      final posts = postsSnapshot.data ?? [];
-                      
-                      return Column(
+          return FutureBuilder<Map<String, dynamic>>(
+            future: _fetchProfileData(userId),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (!snapshot.hasData) {
+                return const Center(child: Text("Error al cargar los datos"));
+              }
+
+              final data = snapshot.data!;
+              final profile = data['profile'];
+              final counts = data['counts'] as Map<String, int>;
+              final posts = data['posts'] as List<dynamic>;
+
+              final displayName = profile?['display_name'] ?? profile?['username'] ?? "Artista";
+              final username = profile?['username'] ?? "user";
+
+              return RefreshIndicator(
+                onRefresh: () async => setState(() {}),
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
+                    children: [
+                      Stack(
+                        clipBehavior: Clip.none,
+                        alignment: Alignment.center,
                         children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                _StatItem(label: "Posts", value: "${posts.length}"),
-                                const SizedBox(width: 40),
-                                const _StatItem(label: "Seguidores", value: "0"),
-                                const SizedBox(width: 40),
-                                const _StatItem(label: "Siguiendo", value: "0"),
-                              ],
+                          Container(height: 180, width: double.infinity, color: const Color(0xFF6C63FF)),
+                          Positioned(
+                            top: 40,
+                            right: 16,
+                            child: IconButton(
+                              icon: const Icon(Icons.settings, color: Colors.white),
+                              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen())),
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          OutlinedButton.icon(
-                            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EditProfileScreen())),
-                            icon: const Icon(Icons.edit, size: 18),
-                            label: const Text("Editar Perfil"),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              side: const BorderSide(color: Colors.grey),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          Positioned(
+                            bottom: -50,
+                            child: CircleAvatar(
+                              radius: 55,
+                              backgroundColor: const Color(0xFF121212),
+                              child: CircleAvatar(
+                                radius: 50,
+                                backgroundColor: Colors.white,
+                                backgroundImage: NetworkImage(profile?['avatar_url'] ?? ProfileService.defaultAvatarUrl),
+                              ),
                             ),
-                          ),
-                          const Divider(height: 40, color: Color(0xFF1E1E1E)),
-                          ListView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: posts.length,
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemBuilder: (context, index) {
-                              final post = posts[index];
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 16),
-                                child: PostCard(
-                                  username: displayName,
-                                  handle: "@$username",
-                                  time: "Post propio",
-                                  content: post['content'] ?? "",
-                                  imageUrl: post['image_url'] ?? "",
-                                  likes: 0,
-                                  comments: 0,
-                                ),
-                              );
-                            },
                           ),
                         ],
-                      );
-                    },
+                      ),
+                      const SizedBox(height: 60),
+                      Text(displayName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+                      Text("@$username", style: const TextStyle(color: Colors.grey)),
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(profile?['bio'] ?? "Sin biografía todavía. ✨", textAlign: TextAlign.center),
+                      ),
+                      // Stats
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _StatItem(label: "Posts", value: "${posts.length}"),
+                          const SizedBox(width: 40),
+                          _StatItem(label: "Seguidores", value: "${counts['followers']}"),
+                          const SizedBox(width: 40),
+                          _StatItem(label: "Siguiendo", value: "${counts['following']}"),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      OutlinedButton.icon(
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EditProfileScreen())),
+                        icon: const Icon(Icons.edit, size: 18),
+                        label: const Text("Editar Perfil"),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Colors.grey),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        ),
+                      ),
+                      const Divider(height: 40, color: Color(0xFF1E1E1E)),
+                      // Grid de fotos real
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: const EdgeInsets.all(2),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 2,
+                          mainAxisSpacing: 2,
+                        ),
+                        itemCount: posts.length,
+                        itemBuilder: (context, index) {
+                          return Image.network(posts[index]['image_url'], fit: BoxFit.cover);
+                        },
+                      ),
+                      const SizedBox(height: 20),
+                    ],
                   ),
-                const SizedBox(height: 20),
-              ],
-            ),
+                ),
+              );
+            },
           );
         },
       ),

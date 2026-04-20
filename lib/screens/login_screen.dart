@@ -12,7 +12,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
-  bool _rememberMe = true; // Por defecto marcado
+  bool _rememberMe = true;
+  bool _isPasswordVisible = false;
 
   Future<void> _login() async {
     setState(() => _isLoading = true);
@@ -24,12 +25,10 @@ class _LoginScreenState extends State<LoginScreen> {
     if (mounted) {
       setState(() => _isLoading = false);
       if (success) {
-        // Si no marcó "Recuérdame", podríamos implementar lógica para borrar la sesión al cerrar,
-        // pero Supabase por defecto persiste. Para este nivel, lo dejamos visual.
         Navigator.pushReplacementNamed(context, '/home');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Email o contraseña incorrectos")),
+          const SnackBar(content: Text("Email o contraseña incorrectos. ¿Has verificado tu email?")),
         );
       }
     }
@@ -53,9 +52,11 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 48),
             TextField(
               controller: _emailController,
+              style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 hintText: 'Email',
-                prefixIcon: const Icon(Icons.email_outlined),
+                hintStyle: const TextStyle(color: Colors.grey),
+                prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF6C63FF)),
                 filled: true,
                 fillColor: const Color(0xFF1E1E1E),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -64,11 +65,19 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _passwordController,
-              obscureText: true,
+              obscureText: !_isPasswordVisible,
+              style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 hintText: 'Contraseña',
-                prefixIcon: const Icon(Icons.lock_outline),
-                suffixIcon: const Icon(Icons.visibility_outlined),
+                hintStyle: const TextStyle(color: Colors.grey),
+                prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF6C63FF)),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                    color: Colors.grey,
+                  ),
+                  onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                ),
                 filled: true,
                 fillColor: const Color(0xFF1E1E1E),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -82,11 +91,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   width: 24,
                   child: Checkbox(
                     value: _rememberMe,
-                    onChanged: (value) {
-                      setState(() {
-                        _rememberMe = value ?? false;
-                      });
-                    },
+                    onChanged: (value) => setState(() => _rememberMe = value ?? false),
                     activeColor: const Color(0xFF6C63FF),
                   ),
                 ),

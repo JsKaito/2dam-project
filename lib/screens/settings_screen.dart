@@ -233,8 +233,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.all(12),
         children: [
           _buildGroup("Cuenta y Seguridad", [
-            _buildTile(Icons.person_outline, "Ir al Perfil", () => Navigator.pushReplacementNamed(context, '/profile')),
-            _buildTile(Icons.security, "Seguridad y Password", _showSecurityPanel),
+            _buildTile(Icons.person_outline, "Perfil", () => Navigator.pushReplacementNamed(context, '/profile')),
+            _buildTile(Icons.security, "Seguridad", _showSecurityPanel),
             _buildTile(Icons.verified_outlined, "Solicitar Verificación", () async {
               await _profileService.requestVerification();
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Solicitud enviada")));
@@ -243,7 +243,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildGroup("Preferencias", [
             _buildTile(Icons.notifications_none, "Notificaciones", _showNotificationPanel),
             _buildTile(Icons.lock_person_outlined, "Privacidad", _showPrivacyPanel),
-            _buildTile(Icons.chat_bubble_outline, "Filtro de Comentarios", _showCommentPanel),
+            _buildTile(Icons.chat_bubble_outline, "Filtros", _showCommentPanel),
           ]),
           _buildGroup("Datos", [
             _buildTile(Icons.download, "Descargar mis datos", () async {

@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import '../services/profile_service.dart';
 
 class PostCard extends StatelessWidget {
   final String username;
-  final String handle;
+  final String handle; // El @usuario
   final String time;
   final String content;
   final String imageUrl;
   final String? profileImageUrl;
   final int likes;
   final int comments;
+  final String userId;
 
   const PostCard({
     super.key,
@@ -20,6 +22,7 @@ class PostCard extends StatelessWidget {
     this.profileImageUrl,
     required this.likes,
     required this.comments,
+    required this.userId,
   });
 
   @override
@@ -33,22 +36,36 @@ class PostCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              CircleAvatar(
-                backgroundImage: profileImageUrl != null 
-                    ? NetworkImage(profileImageUrl!) 
-                    : const NetworkImage("https://i.pravatar.cc/150?u=artist"),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          // Enlace Real: Navegación por ruta nombrada
+          InkWell(
+            onTap: () {
+              // Extraemos el username sin el @ para la URL
+              final cleanHandle = handle.startsWith('@') ? handle.substring(1) : handle;
+              Navigator.pushNamed(context, '/user/$cleanHandle');
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.all(4.0),
+              child: Row(
                 children: [
-                  Text(username, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  Text("$handle · $time", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                  CircleAvatar(
+                    backgroundImage: (profileImageUrl != null && profileImageUrl!.isNotEmpty)
+                        ? NetworkImage(profileImageUrl!) 
+                        : const NetworkImage(ProfileService.defaultAvatarUrl),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(username, style: const TextStyle(fontWeight: FontWeight.bold, decoration: TextDecoration.underline)),
+                        Text("$handle · $time", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
           const SizedBox(height: 12),
           Text(content),

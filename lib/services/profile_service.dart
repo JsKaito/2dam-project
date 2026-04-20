@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 class ProfileService {
   final _supabase = Supabase.instance.client;
 
+  static const String defaultAvatarUrl = 'https://yrbzkgfomjqilmyxzfqe.supabase.co/storage/v1/object/public/default/default_pfp.webp';
+
   Stream<Map<String, dynamic>> get profileStream {
     final user = _supabase.auth.currentUser;
     if (user == null) return const Stream.empty();
@@ -27,114 +29,170 @@ class ProfileService {
     }
   }
 
-  // --- 1. ELIMINACIÓN REAL ---
+  Future<Map<String, dynamic>?> getProfileById(String userId) async {
+    try {
+      return await _supabase.from('profiles').select('*').eq('id', userId).single();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Obtener perfil por username (@)
+  Future<Map<String, dynamic>?> getProfileByUsername(String username) async {
+    try {
+      return await _supabase
+          .from('profiles')
+          .select('*')
+          .eq('username', username.toLowerCase())
+          .single();
+    } catch (e) {
+      print("Error obteniendo perfil por username: $e");
+      return null;
+    }
+  }
+
+  // Búsqueda de usuarios con ranking de popularidad real
+  Future<List<dynamic>> searchUsers(String query) async {
+    try {
+      var request = _supabase
+          .from('profiles')
+          .select('id, username, display_name, avatar_url, bio, followers!followers_following_id_fkey(follower_id)');
+      
+      if (query.isNotEmpty) {
+        request = request.or('username.ilike.%$query%,display_name.ilike.%$query%');
+      }
+      
+      final res = await request.limit(20);
+      final List<dynamic> users = List.from(res as List);
+
+      users.sort((a, b) {
+        final countA = (a['followers'] as List).length;
+        final countB = (b['followers'] as List).length;
+        return countB.compareTo(countA);
+      });
+
+      return users;
+    } catch (e) {
+      print("Error buscando usuarios: $e");
+      return [];
+    }
+  }
+
+  Future<Map<String, int>> getFollowCounts(String userId) async {
+    try {
+      final followers = await _supabase.from('followers').select('follower_id').eq('following_id', userId);
+      final following = await _supabase.from('followers').select('following_id').eq('follower_id', userId);
+      return {
+        'followers': (followers as List).length,
+        'following': (following as List).length,
+      };
+    } catch (e) {
+      return {'followers': 0, 'following': 0};
+    }
+  }
+
+  Future<bool> isUsernameAvailable(String username) async {
+    if (username.isEmpty) return true;
+    try {
+      final res = await _supabase.from('profiles').select('username').eq('username', username.trim().toLowerCase()).maybeSingle();
+      return res == null;
+    } catch (e) { return false; }
+  }
+
+  // --- SISTEMA SOCIAL ---
+  Future<bool> isFollowing(String targetUserId) async {
+    try {
+      final currentUserId = _supabase.auth.currentUser?.id;
+      if (currentUserId == null) return false;
+      final res = await _supabase.from('followers').select().eq('follower_id', currentUserId).eq('following_id', targetUserId).maybeSingle();
+      return res != null;
+    } catch (e) { return false; }
+  }
+
+  Future<void> followUser(String targetUserId) async {
+    final currentUserId = _supabase.auth.currentUser?.id;
+    if (currentUserId == null) return;
+    await _supabase.from('followers').insert({'follower_id': currentUserId, 'following_id': targetUserId});
+  }
+
+  Future<void> unfollowUser(String targetUserId) async {
+    final currentUserId = _supabase.auth.currentUser?.id;
+    if (currentUserId == null) return;
+    await _supabase.from('followers').delete().eq('follower_id', currentUserId).eq('following_id', targetUserId);
+  }
+
+  Future<void> blockUser(String targetUserId) async {
+    final currentUserId = _supabase.auth.currentUser?.id;
+    if (currentUserId == null) return;
+    await _supabase.from('blocked_users').insert({'blocker_id': currentUserId, 'blocked_id': targetUserId});
+  }
+
   Future<bool> deleteAccount() async {
     try {
       await _supabase.rpc('delete_user_account');
       await _supabase.auth.signOut();
       return true;
-    } catch (e) {
-      print("Error fatal al eliminar cuenta: $e");
-      return false;
-    }
+    } catch (e) { return false; }
   }
 
-  // --- 2. VERIFICACIÓN 2 PASOS (MFA REAL) ---
-  Future<String?> enrollMFA() async {
-    try {
-      final res = await _supabase.auth.mfa.enroll(factorType: FactorType.totp);
-      return res.totp?.qrCode;
-    } catch (e) {
-      print("Error MFA: $e");
-      return null;
-    }
-  }
-
-  // --- 3. SEGURIDAD Y PASSWORD ---
   Future<bool> updatePassword(String newPassword) async {
     try {
       await _supabase.auth.updateUser(UserAttributes(password: newPassword));
       return true;
-    } catch (e) {
-      return false;
-    }
+    } catch (e) { return false; }
   }
 
   Future<void> logoutOthers() async {
     await _supabase.auth.signOut(scope: SignOutScope.others);
   }
 
-  // --- 4. VERIFICACIÓN DE CUENTA ---
   Future<bool> requestVerification() async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return false;
-      await _supabase.from('verification_requests').insert({'user_id': user.id});
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  // --- 5. DESCARGA REAL DE DATOS (JSON) ---
-  Future<void> downloadUserDataReal() async {
-    try {
-      final user = _supabase.auth.currentUser;
-      final profile = await getCurrentProfile();
-      final Map<String, dynamic> data = {
-        "account": {"id": user?.id, "email": user?.email},
-        "profile": profile,
-      };
-      if (kIsWeb) {
-        final bytes = utf8.encode(jsonEncode(data));
-        final blob = html.Blob([bytes]);
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        html.AnchorElement(href: url)..setAttribute("download", "data_artists_cottage.json")..click();
-        html.Url.revokeObjectUrl(url);
-      }
-    } catch (e) { print("Error descarga: $e"); }
-  }
-
-  // --- 6. GESTIÓN DE AJUSTES ---
-  Future<bool> updateSetting(String key, dynamic value) async {
-    try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) return false;
-      await _supabase.from('profiles').update({key: value}).eq('id', user.id);
+      await _supabase.from('support_tickets').insert({'user_id': user.id, 'type': 'verification', 'content': 'Solicitud verificado'});
       return true;
     } catch (e) { return false; }
   }
 
-  // --- 7. PERFIL Y AVATAR ---
+  Future<void> downloadUserDataReal() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      final profile = await getCurrentProfile();
+      final Map<String, dynamic> data = {"account": {"id": user?.id, "email": user?.email}, "profile": profile};
+      if (kIsWeb) {
+        final bytes = utf8.encode(jsonEncode(data));
+        final blob = html.Blob([bytes]);
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        html.AnchorElement(href: url)..setAttribute("download", "data.json")..click();
+        html.Url.revokeObjectUrl(url);
+      }
+    } catch (e) {}
+  }
+
+  Future<bool> updateSetting(String key, dynamic value) async {
+    try {
+      await _supabase.from('profiles').update({key: value}).eq('id', _supabase.auth.currentUser!.id);
+      return true;
+    } catch (e) { return false; }
+  }
+
   Future<String?> uploadAvatar(dynamic imageFile) async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return null;
       final path = 'avatars/${user.id}/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      if (kIsWeb) {
-        await _supabase.storage.from('posts').uploadBinary(path, imageFile);
-      } else {
-        await _supabase.storage.from('posts').upload(path, imageFile as File);
-      }
+      if (kIsWeb) await _supabase.storage.from('posts').uploadBinary(path, imageFile);
+      else await _supabase.storage.from('posts').upload(path, imageFile as File);
       return _supabase.storage.from('posts').getPublicUrl(path);
     } catch (e) { return null; }
   }
 
-  Future<bool> updateProfile({
-    required String username,
-    required String displayName,
-    String? bio,
-    String? avatarUrl,
-  }) async {
+  Future<bool> updateProfile({required String username, required String displayName, String? bio, String? avatarUrl}) async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return false;
-      final Map<String, dynamic> updates = {
-        if (username.isNotEmpty) 'username': username,
-        if (displayName.isNotEmpty) 'display_name': displayName,
-        if (bio != null) 'bio': bio,
-        if (avatarUrl != null) 'avatar_url': avatarUrl,
-      };
+      final Map<String, dynamic> updates = {if (username.isNotEmpty) 'username': username.toLowerCase(), if (displayName.isNotEmpty) 'display_name': displayName, if (bio != null) 'bio': bio, if (avatarUrl != null) 'avatar_url': avatarUrl};
       await _supabase.from('profiles').update(updates).eq('id', user.id);
       return true;
     } catch (e) { return false; }

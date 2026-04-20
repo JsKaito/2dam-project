@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/post_card.dart';
 import '../services/post_service.dart';
 
@@ -12,8 +13,26 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final PostService _postService = PostService();
 
+  String _formatTimestamp(String? timestamp) {
+    if (timestamp == null) return "Reciente";
+    final date = DateTime.parse(timestamp);
+    final now = DateTime.now();
+    final difference = now.difference(date);
+    if (difference.inSeconds < 60) return "Hace unos segundos";
+    if (difference.inMinutes < 60) return "Hace ${difference.inMinutes} min";
+    if (difference.inHours < 24) return "Hace ${difference.inHours} h";
+    if (difference.inDays < 7) return "Hace ${difference.inDays} d";
+    return "${date.day}/${date.month}/${date.year}";
+  }
+
   @override
   Widget build(BuildContext context) {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+
+    if (userId == null) {
+      return const Center(child: Text("Inicia sesión para ver tu feed"));
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Artist's Cottage", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -27,7 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: _postService.postsStream,
+        stream: _postService.getHomeFeedStream(userId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)));
@@ -40,16 +59,14 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.palette_outlined, size: 64, color: Colors.grey),
+                  Icon(Icons.people_outline, size: 64, color: Colors.grey),
                   SizedBox(height: 16),
-                  Text("¡Todavía no hay publicaciones!", style: TextStyle(color: Colors.grey)),
+                  Text("Sigue a otros artistas para ver sus obras aquí.", style: TextStyle(color: Colors.grey)),
                 ],
               ),
             );
           }
 
-          // Usamos un FutureBuilder dentro del StreamBuilder para traer los nombres de los perfiles
-          // ya que los Streams de Supabase no traen datos de otras tablas automáticamente
           return FutureBuilder<List<Map<String, dynamic>>>(
             future: _postService.attachProfiles(rawPosts),
             builder: (context, profileSnapshot) {
@@ -61,18 +78,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 itemBuilder: (context, index) {
                   final post = posts[index];
                   final profile = post['profiles'];
-                  
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16.0),
                     child: PostCard(
                       username: profile != null ? profile['display_name'] ?? profile['username'] ?? "Artista" : "Artista",
                       handle: "@${profile != null ? profile['username'] ?? 'user' : 'user'}",
-                      time: "Reciente",
+                      time: _formatTimestamp(post['created_at']),
                       content: post['content'] ?? "",
                       imageUrl: post['image_url'] ?? "",
                       profileImageUrl: profile != null ? profile['avatar_url'] : null,
                       likes: 0,
                       comments: 0,
+                      userId: post['user_id'],
                     ),
                   );
                 },

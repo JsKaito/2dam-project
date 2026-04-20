@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:html' as html;
 import 'screens/home_screen.dart';
 import 'screens/explore_screen.dart';
 import 'screens/create_post_screen.dart';
@@ -20,55 +21,50 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
+    _syncUrlWithIndex(_selectedIndex);
   }
 
-  // Las pantallas se mantienen en memoria para que no se pierdan al cambiar
+  // Las pantallas se mantienen en memoria
   final List<Widget> _screens = [
     const HomeScreen(),
     const ExploreScreen(),
-    const SizedBox.shrink(), // Placeholder para el botón de '+'
+    const SizedBox.shrink(),
     const NotificationsScreen(),
     const ProfileScreen(),
   ];
 
-  void _onItemTapped(int index) {    if (index == 2) {
-    _showCreatePost();
-  } else {
-    // Definimos las rutas según el index
+  void _syncUrlWithIndex(int index) {
     final Map<int, String> routes = {
       0: '/home',
       1: '/explore',
       3: '/notifications',
       4: '/profile',
     };
-
     if (routes.containsKey(index)) {
-      // Esto cambia la URL en el navegador
-      Navigator.pushReplacementNamed(context, routes[index]!);
+      // Usamos pushState de HTML para que la URL cambie físicamente arriba
+      // pero sin usar Navigator de Flutter para no reiniciar la app
+      html.window.history.pushState(null, '', routes[index]!);
     }
   }
+
+  void _onItemTapped(int index) {
+    if (index == 2) {
+      _showCreatePost();
+    } else {
+      // IMPORTANTE: Aquí solo cambiamos el estado INTERNO del Wrapper
+      // NO llamamos a Navigator.pushReplacementNamed porque eso reinicia todo
+      setState(() {
+        _selectedIndex = index;
+      });
+      _syncUrlWithIndex(index);
+    }
   }
 
   void _showCreatePost() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const CreatePostScreen()),
-    ).then((_) {
-      // Al volver de crear el post, refrescamos el estado si es necesario
-      setState(() {});
-    });
-  }
-
-  void _updateWebUrl(int index) {
-    final Map<int, String> routes = {
-      0: '/home',
-      1: '/explore',
-      3: '/notifications',
-      4: '/profile',
-    };
-    if (routes.containsKey(index)) {
-      // En una app real usaríamos GoRouter, aquí simulamos el cambio visual
-    }
+    );
   }
 
   @override
