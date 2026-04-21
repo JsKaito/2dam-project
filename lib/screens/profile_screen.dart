@@ -4,6 +4,7 @@ import '../services/profile_service.dart';
 import '../services/post_service.dart';
 import 'settings_screen.dart';
 import 'edit_profile_screen.dart';
+import 'post_details_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -16,7 +17,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final ProfileService _profileService = ProfileService();
   final PostService _postService = PostService();
 
-  // Cargador unificado para evitar bucles de setState
   Future<Map<String, dynamic>> _fetchProfileData(String userId) async {
     final results = await Future.wait([
       _profileService.getFollowCounts(userId),
@@ -66,6 +66,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               final displayName = profile?['display_name'] ?? profile?['username'] ?? "Artista";
               final username = profile?['username'] ?? "user";
+              final isVerified = profile?['is_verified'] ?? false;
 
               return RefreshIndicator(
                 onRefresh: () async => setState(() {}),
@@ -101,13 +102,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ],
                       ),
                       const SizedBox(height: 60),
-                      Text(displayName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(displayName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+                          if (isVerified) ...[
+                            const SizedBox(width: 6),
+                            const Icon(Icons.verified, color: Colors.blue, size: 20),
+                          ],
+                        ],
+                      ),
                       Text("@$username", style: const TextStyle(color: Colors.grey)),
                       Padding(
                         padding: const EdgeInsets.all(16.0),
                         child: Text(profile?['bio'] ?? "Sin biografía todavía. ✨", textAlign: TextAlign.center),
                       ),
-                      // Stats
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -130,7 +139,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       const Divider(height: 40, color: Color(0xFF1E1E1E)),
-                      // Grid de fotos real
+                      // Grid de fotos corregido para abrir el detalle
                       GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -142,7 +151,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         itemCount: posts.length,
                         itemBuilder: (context, index) {
-                          return Image.network(posts[index]['image_url'], fit: BoxFit.cover);
+                          final post = posts[index];
+                          return GestureDetector(
+                            onTap: () => Navigator.push(
+                              context, 
+                              MaterialPageRoute(builder: (context) => PostDetailsScreen(postId: post['id']))
+                            ),
+                            child: Image.network(post['image_url'], fit: BoxFit.cover),
+                          );
                         },
                       ),
                       const SizedBox(height: 20),

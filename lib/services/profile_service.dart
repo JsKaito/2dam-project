@@ -53,11 +53,12 @@ class ProfileService {
     }
   }
 
+  // Búsqueda de usuarios - Añadido is_verified
   Future<List<dynamic>> searchUsers(String query) async {
     try {
       var request = _supabase
           .from('profiles')
-          .select('id, username, display_name, avatar_url, bio, followers!followers_following_id_fkey(follower_id)');
+          .select('id, username, display_name, avatar_url, bio, is_verified, followers!followers_following_id_fkey(follower_id)');
       
       if (query.isNotEmpty) {
         request = request.or('username.ilike.%$query%,display_name.ilike.%$query%');
@@ -135,24 +136,59 @@ class ProfileService {
     } catch (e) { return false; }
   }
 
-  Future<bool> updatePassword(String newPassword) async {
+  Future<bool> sendPasswordResetEmail() async {
     try {
-      await _supabase.auth.updateUser(UserAttributes(password: newPassword));
+      final user = _supabase.auth.currentUser;
+      if (user?.email == null) return false;
+      await _supabase.auth.resetPasswordForEmail(user!.email!);
       return true;
-    } catch (e) { return false; }
+    } catch (e) {
+      print("Error enviando email de reset: $e");
+      return false;
+    }
   }
 
   Future<void> logoutOthers() async {
     await _supabase.auth.signOut(scope: SignOutScope.others);
   }
 
+  Future<String?> getVerificationStatus() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return null;
+      final res = await _supabase
+          .from('verification_requests')
+          .select('status')
+          .eq('user_id', user.id)
+          .maybeSingle();
+      return res?['status'];
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<bool> requestVerification() async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return false;
-      await _supabase.from('support_tickets').insert({'user_id': user.id, 'type': 'verification', 'content': 'Solicitud verificado'});
+      
+      final existing = await getVerificationStatus();
+      
+      if (existing == 'accepted' || existing == 'pending') return false;
+
+      if (existing == 'denied') {
+        await _supabase.from('verification_requests').delete().eq('user_id', user.id);
+      }
+
+      await _supabase.from('verification_requests').insert({
+        'user_id': user.id, 
+        'status': 'pending'
+      });
       return true;
-    } catch (e) { return false; }
+    } catch (e) { 
+      print("Error en verificación: $e");
+      return false; 
+    }
   }
 
   Future<void> downloadUserDataReal() async {

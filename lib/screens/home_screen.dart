@@ -38,12 +38,6 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text("Artist's Cottage", style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        actions: [
-          IconButton(
-            onPressed: () => Navigator.pushNamed(context, '/explore'),
-            icon: const Icon(Icons.search),
-          ),
-        ],
       ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: _postService.getHomeFeedStream(userId),
@@ -81,15 +75,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16.0),
                     child: PostCard(
+                      postId: post['id'].toString(),
                       username: profile != null ? profile['display_name'] ?? profile['username'] ?? "Artista" : "Artista",
                       handle: "@${profile != null ? profile['username'] ?? 'user' : 'user'}",
                       time: _formatTimestamp(post['created_at']),
                       content: post['content'] ?? "",
                       imageUrl: post['image_url'] ?? "",
                       profileImageUrl: profile != null ? profile['avatar_url'] : null,
-                      likes: 0,
-                      comments: 0,
+                      likes: post['likes_count'] ?? 0,
+                      comments: post['comments_count'] ?? 0,
+                      isLiked: post['is_liked'] ?? false, // PASAMOS EL ESTADO REAL
                       userId: post['user_id'],
+                      isVerified: profile != null ? (profile['is_verified'] ?? false) : false,
                     ),
                   );
                 },

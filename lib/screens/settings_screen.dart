@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
 import '../services/profile_service.dart';
+import 'edit_profile_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -23,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _tagApprovalRequired = false;
   List<String> _hiddenWordsTags = [];
   bool _isLoading = true;
+  String? _verificationStatus;
 
   @override
   void initState() {
@@ -32,7 +33,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadAllSettings() async {
     try {
-      final profile = await _profileService.getCurrentProfile();
+      final results = await Future.wait([
+        _profileService.getCurrentProfile(),
+        _profileService.getVerificationStatus(),
+      ]);
+
+      final profile = results[0] as Map<String, dynamic>?;
+      final vStatus = results[1] as String?;
+
       if (profile != null && mounted) {
         setState(() {
           _pushLikes = profile['push_likes'] ?? true;
@@ -46,6 +54,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           final String hw = profile['hidden_words'] ?? '';
           _hiddenWordsTags = hw.isNotEmpty ? hw.split(',').where((s) => s.trim().isNotEmpty).toList() : [];
           
+          _verificationStatus = vStatus;
           _isLoading = false;
         });
       }
@@ -67,7 +76,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _profileService.updateSetting(key, value);
   }
 
-  // --- SUB-PANELES CON STATEFULBUILDER (REACTIVIDAD REAL) ---
+  // --- SUB-PANELES ---
 
   void _showNotificationPanel() {
     _showPanel(
@@ -140,35 +149,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
       title: "Seguridad",
       builder: (context, setPanelState) => Column(
         children: [
-          _buildTile(Icons.lock_outline, "Cambiar contraseña", () => _showChangePasswordDialog()),
+          _buildTile(Icons.lock_outline, "Cambiar contraseña", () => _requestPasswordReset()),
           _buildSwitch("Verificación 2 Pasos (2FA)", _mfaEnabled, (v) { setPanelState(() => _mfaEnabled = v); _update('mfa_enabled', v); }),
           _buildTile(Icons.devices, "Cerrar otras sesiones", () async {
             await _profileService.logoutOthers();
-            Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Otras sesiones cerradas")));
+            if (mounted) {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Otras sesiones cerradas correctamente")));
+            }
           }),
         ],
       ),
     );
   }
 
-  void _showChangePasswordDialog() {
-    final c = TextEditingController();
-    showDialog(context: context, builder: (context) => AlertDialog(
-      backgroundColor: const Color(0xFF1E1E1E),
-      title: const Text("Nueva Contraseña"),
-      content: TextField(controller: c, obscureText: true, decoration: const InputDecoration(hintText: "Mínimo 6 caracteres")),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCELAR")),
-        TextButton(onPressed: () async {
-          if (c.text.length >= 6) {
-            await _profileService.updatePassword(c.text);
-            Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Éxito")));
-          }
-        }, child: const Text("GUARDAR")),
-      ],
-    ));
+  Future<void> _requestPasswordReset() async {
+    final success = await _profileService.sendPasswordResetEmail();
+    if (mounted) {
+      Navigator.pop(context);
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Hemos enviado un email para cambiar tu contraseña")),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Error al enviar el email de cambio de contraseña")),
+        );
+      }
+    }
   }
 
   void _confirmDelete() {
@@ -227,18 +235,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    
+    // Traducción amigable del estado
+    String statusText = "No solicitada";
+    Color statusColor = Colors.grey;
+    bool canRequestAgain = _verificationStatus == null || _verificationStatus == 'denied';
+
+    if (_verificationStatus == 'pending') { 
+      statusText = "En revisión..."; 
+      statusColor = Colors.orange; 
+    } else if (_verificationStatus == 'accepted') { 
+      statusText = "Verificado ✅"; 
+      statusColor = Colors.green; 
+    } else if (_verificationStatus == 'denied') { 
+      statusText = "Solicitud denegada (Toca para reintentar)"; 
+      statusColor = Colors.redAccent; 
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text("Ajustes"), centerTitle: true),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
           _buildGroup("Cuenta y Seguridad", [
-            _buildTile(Icons.person_outline, "Perfil", () => Navigator.pushReplacementNamed(context, '/profile')),
+            _buildTile(Icons.person_outline, "Perfil", () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EditProfileScreen()))),
             _buildTile(Icons.security, "Seguridad", _showSecurityPanel),
-            _buildTile(Icons.verified_outlined, "Solicitar Verificación", () async {
-              await _profileService.requestVerification();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Solicitud enviada")));
-            }),
+            
+            // BOTÓN DE VERIFICACIÓN DINÁMICO MEJORADO
+            ListTile(
+              leading: Icon(
+                Icons.verified_outlined, 
+                color: _verificationStatus == 'accepted' ? Colors.blue : (_verificationStatus == 'denied' ? Colors.redAccent : Colors.white), 
+                size: 22
+              ),
+              title: const Text("Estado de Verificación"),
+              subtitle: Text(statusText, style: TextStyle(color: statusColor, fontSize: 12)),
+              trailing: canRequestAgain ? const Icon(Icons.chevron_right, size: 18) : null,
+              onTap: () async {
+                if (_verificationStatus == 'pending') {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Tu solicitud está siendo revisada.")));
+                  return;
+                }
+                if (_verificationStatus == 'accepted') {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("¡Ya eres un artista verificado!")));
+                  return;
+                }
+
+                // Si es nulo o denegado, permitimos enviar
+                final ok = await _profileService.requestVerification();
+                if (mounted) {
+                  if (ok) {
+                    setState(() => _verificationStatus = 'pending');
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Solicitud enviada correctamente")));
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al enviar la solicitud.")));
+                  }
+                }
+              },
+            ),
           ]),
           _buildGroup("Preferencias", [
             _buildTile(Icons.notifications_none, "Notificaciones", _showNotificationPanel),

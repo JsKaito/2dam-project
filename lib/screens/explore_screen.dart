@@ -3,6 +3,7 @@ import '../widgets/post_card.dart';
 import '../services/post_service.dart';
 import '../services/profile_service.dart';
 import 'user_profile_screen.dart';
+import 'post_details_screen.dart';
 
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
@@ -115,6 +116,7 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: PostCard(
+                postId: post['id'].toString(),
                 username: profile?['display_name'] ?? profile?['username'] ?? "Artista",
                 handle: "@${profile?['username'] ?? 'user'}",
                 time: "Reciente",
@@ -122,8 +124,9 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
                 imageUrl: post['image_url'] ?? "",
                 profileImageUrl: profile?['avatar_url'],
                 userId: post['user_id'] ?? "",
-                likes: 0,
-                comments: 0,
+                likes: post['likes_count'] ?? 0, // AHORA REAL
+                comments: post['comments_count'] ?? 0, // AHORA REAL
+                isVerified: profile != null ? (profile['is_verified'] ?? false) : false,
               ),
             );
           },
@@ -151,16 +154,24 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
           itemBuilder: (context, index) {
             final user = users[index];
             final username = user['username'] ?? "";
+            final isVerified = user['is_verified'] ?? false;
             
             return ListTile(
               leading: CircleAvatar(
                 backgroundImage: NetworkImage(user['avatar_url'] ?? ProfileService.defaultAvatarUrl),
               ),
-              title: Text(user['display_name'] ?? username, style: const TextStyle(fontWeight: FontWeight.bold)),
+              title: Row(
+                children: [
+                  Text(user['display_name'] ?? username, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  if (isVerified) ...[
+                    const SizedBox(width: 4),
+                    const Icon(Icons.verified, color: Colors.blue, size: 14),
+                  ],
+                ],
+              ),
               subtitle: Text("@$username", style: const TextStyle(color: Colors.grey, fontSize: 13)),
               trailing: const Icon(Icons.chevron_right, color: Colors.grey, size: 18),
               onTap: () {
-                // Navegación Directa para mayor fiabilidad
                 Navigator.push(
                   context,
                   MaterialPageRoute(

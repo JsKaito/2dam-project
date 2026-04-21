@@ -4,15 +4,14 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/user_profile_screen.dart';
+import 'screens/post_details_screen.dart';
+import 'screens/reset_password_screen.dart';
 import 'navigation_wrapper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // URL limpia sin '#' para web
   usePathUrlStrategy();
 
-  // Inicialización estándar
   await Supabase.initialize(
     url: 'https://yrbzkgfomjqilmyxzfqe.supabase.co',
     anonKey: 'sb_publishable_btZL2OIyfvGSBnbbegPR5g_VyUN1Hz8',
@@ -44,24 +43,54 @@ class MyApp extends StatelessWidget {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/home': (context) => const NavigationWrapper(initialIndex: 0),
+        '/reset-password': (context) => const ResetPasswordScreen(),
       },
-      // Manejador de rutas dinámicas para perfiles de usuario
       onGenerateRoute: (settings) {
-        if (settings.name != null && settings.name!.startsWith('/user/')) {
-          final username = settings.name!.replaceFirst('/user/', '');
+        if (settings.name == null) return null;
+        
+        final uri = Uri.parse(settings.name!);
+
+        // Ruta: /user/username
+        if (uri.pathSegments.length == 2 && uri.pathSegments.first == 'user') {
           return MaterialPageRoute(
-            builder: (context) => UserProfileScreen(username: username),
+            builder: (context) => UserProfileScreen(username: uri.pathSegments[1]),
             settings: settings,
           );
         }
+
+        // Ruta: /post/id
+        if (uri.pathSegments.length == 2 && uri.pathSegments.first == 'post') {
+          return MaterialPageRoute(
+            builder: (context) => PostDetailsScreen(postId: uri.pathSegments[1]),
+            settings: settings,
+          );
+        }
+        
         return null;
       },
     );
   }
 }
 
-class AuthGuardian extends StatelessWidget {
+class AuthGuardian extends StatefulWidget {
   const AuthGuardian({super.key});
+
+  @override
+  State<AuthGuardian> createState() => _AuthGuardianState();
+}
+
+class _AuthGuardianState extends State<AuthGuardian> {
+  @override
+  void initState() {
+    super.initState();
+    // Escuchamos eventos especiales como la recuperación de contraseña
+    Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final AuthChangeEvent event = data.event;
+      if (event == AuthChangeEvent.passwordRecovery) {
+        Navigator.pushNamed(context, '/reset-password');
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,6 +105,7 @@ class AuthGuardian extends StatelessWidget {
         }
 
         final session = snapshot.data?.session ?? Supabase.instance.client.auth.currentSession;
+        
         if (session != null) {
           return const NavigationWrapper(initialIndex: 0);
         }
