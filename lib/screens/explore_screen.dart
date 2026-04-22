@@ -3,7 +3,6 @@ import '../widgets/post_card.dart';
 import '../services/post_service.dart';
 import '../services/profile_service.dart';
 import 'user_profile_screen.dart';
-import 'post_details_screen.dart';
 
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
@@ -95,14 +94,25 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
   }
 
   Widget _buildPostsTab() {
-    return FutureBuilder<List<dynamic>>(
-      future: _postService.getGlobalPosts(query: _searchQuery),
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: _postService.getGlobalPostsStream(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)));
         }
 
-        final posts = snapshot.data ?? [];
+        var posts = snapshot.data ?? [];
+        
+        // Aplicamos el filtro de búsqueda localmente para que sea instantáneo y reactivo
+        if (_searchQuery.isNotEmpty) {
+          posts = posts.where((post) {
+            final content = (post['content'] ?? '').toLowerCase();
+            final username = (post['profiles']?['username'] ?? '').toLowerCase();
+            final query = _searchQuery.toLowerCase();
+            return content.contains(query) || username.contains(query);
+          }).toList();
+        }
+
         if (posts.isEmpty) {
           return const Center(child: Text("Sin resultados en publicaciones.", style: TextStyle(color: Colors.grey)));
         }
@@ -124,9 +134,10 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
                 imageUrl: post['image_url'] ?? "",
                 profileImageUrl: profile?['avatar_url'],
                 userId: post['user_id'] ?? "",
-                likes: post['likes_count'] ?? 0, // AHORA REAL
-                comments: post['comments_count'] ?? 0, // AHORA REAL
-                isVerified: profile != null ? (profile['is_verified'] ?? false) : false,
+                likes: post['likes_count'] ?? 0,
+                comments: post['comments_count'] ?? 0,
+                isLiked: post['is_liked'] ?? false,
+                isVerified: profile?['is_verified'] ?? false,
               ),
             );
           },
@@ -136,6 +147,8 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
   }
 
   Widget _buildUsersTab() {
+    // Para los usuarios, seguimos usando FutureBuilder ya que la búsqueda de usuarios 
+    // no suele requerir streaming constante, pero al estar en el TabBarView se refresca al cambiar.
     return FutureBuilder<List<dynamic>>(
       future: _profileService.searchUsers(_searchQuery),
       builder: (context, snapshot) {

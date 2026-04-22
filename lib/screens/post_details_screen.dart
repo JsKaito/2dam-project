@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/post_service.dart';
 import '../services/profile_service.dart';
 
@@ -38,6 +39,38 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
         _comments = commentsData;
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _deletePost() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text("¿Borrar publicación?"),
+        content: const Text("Esta acción no se puede deshacer."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("CANCELAR")),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true), 
+            child: const Text("BORRAR", style: TextStyle(color: Colors.redAccent))
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() => _isLoading = true);
+      final ok = await _postService.deletePost(widget.postId);
+      if (mounted) {
+        if (ok) {
+          Navigator.pop(context); // Volver atrás tras borrar
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Publicación eliminada")));
+        } else {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al borrar")));
+        }
+      }
     }
   }
 
@@ -103,12 +136,20 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
     if (_post == null) return const Scaffold(body: Center(child: Text("Publicación no encontrada")));
 
     final profile = _post!['profiles'];
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    final bool isMyPost = profile?['id'] == currentUserId;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text("Publicación", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          if (isMyPost) IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+            onPressed: _deletePost,
+          ),
+        ],
       ),
       body: Column(
         children: [

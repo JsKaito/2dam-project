@@ -3,25 +3,55 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class NotificationService {
   final _supabase = Supabase.instance.client;
 
-  // Stream seguro para notificaciones
   Stream<List<Map<String, dynamic>>> get notificationsStream {
-    final user = _supabase.auth.currentUser;
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return const Stream.empty();
     
-    // Si el usuario es nulo (arranque de la app), devolvemos un stream vacío
-    // Esto evita la pantalla blanca por el error 'Null check operator'
-    if (user == null) {
-      return const Stream.empty();
-    }
-
     return _supabase
         .from('notifications')
         .stream(primaryKey: ['id'])
-        .eq('user_id', user.id)
-        .order('created_at')
-        .map((maps) => maps.reversed.toList());
+        .eq('receiver_id', userId)
+        .order('created_at', ascending: false)
+        .asyncMap((event) async {
+          if (event.isEmpty) return [];
+          
+          // 1. Obtenemos todos los sender_id únicos
+          final senderIds = event.map((n) => n['sender_id'] as String).toSet().toList();
+
+          // 2. Cargamos TODOS los perfiles de golpe en una sola consulta
+          final profilesData = await _supabase
+              .from('profiles')
+              .select('id, username, avatar_url')
+              .inFilter('id', senderIds);
+
+          // 3. Creamos un mapa rápido para acceso instantáneo
+          final Map<String, dynamic> profilesMap = {
+            for (var p in profilesData) p['id']: p
+          };
+
+          // 4. Enlazamos los datos en memoria sin esperas adicionales
+          return event.map((notif) {
+            return {
+              ...notif,
+              'sender_profile': profilesMap[notif['sender_id']],
+            };
+          }).toList();
+        });
   }
 
-  Future<void> markAsRead(int id) async {
-    await _supabase.from('notifications').update({'is_read': true}).eq('id', id);
+  Future<void> markAsRead(String notificationId) async {
+    await _supabase
+        .from('notifications')
+        .update({'is_read': true})
+        .eq('id', notificationId);
+  }
+
+  Future<void> markAllAsRead() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    await _supabase
+        .from('notifications')
+        .update({'is_read': true})
+        .eq('receiver_id', userId);
   }
 }

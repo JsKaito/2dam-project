@@ -29,9 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final userId = Supabase.instance.client.auth.currentUser?.id;
 
-    if (userId == null) {
-      return const Center(child: Text("Inicia sesión para ver tu feed"));
-    }
+    if (userId == null) return const Center(child: Text("Inicia sesión para ver tu feed"));
 
     return Scaffold(
       appBar: AppBar(
@@ -39,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
+      // CAMBIADO: StreamBuilder para Tiempo Real Real
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: _postService.getHomeFeedStream(userId),
         builder: (context, snapshot) {
@@ -46,9 +45,9 @@ class _HomeScreenState extends State<HomeScreen> {
             return const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)));
           }
 
-          final rawPosts = snapshot.data ?? [];
+          final posts = snapshot.data ?? [];
 
-          if (rawPosts.isEmpty) {
+          if (posts.isEmpty) {
             return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -61,35 +60,29 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }
 
-          return FutureBuilder<List<Map<String, dynamic>>>(
-            future: _postService.attachProfiles(rawPosts),
-            builder: (context, profileSnapshot) {
-              final posts = profileSnapshot.data ?? rawPosts;
-
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: posts.length,
-                itemBuilder: (context, index) {
-                  final post = posts[index];
-                  final profile = post['profiles'];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16.0),
-                    child: PostCard(
-                      postId: post['id'].toString(),
-                      username: profile != null ? profile['display_name'] ?? profile['username'] ?? "Artista" : "Artista",
-                      handle: "@${profile != null ? profile['username'] ?? 'user' : 'user'}",
-                      time: _formatTimestamp(post['created_at']),
-                      content: post['content'] ?? "",
-                      imageUrl: post['image_url'] ?? "",
-                      profileImageUrl: profile != null ? profile['avatar_url'] : null,
-                      likes: post['likes_count'] ?? 0,
-                      comments: post['comments_count'] ?? 0,
-                      isLiked: post['is_liked'] ?? false, // PASAMOS EL ESTADO REAL
-                      userId: post['user_id'],
-                      isVerified: profile != null ? (profile['is_verified'] ?? false) : false,
-                    ),
-                  );
-                },
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: posts.length,
+            itemBuilder: (context, index) {
+              final post = posts[index];
+              final profile = post['profiles'];
+              
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: PostCard(
+                  postId: post['id'].toString(),
+                  username: profile != null ? profile['display_name'] ?? profile['username'] ?? "Artista" : "Artista",
+                  handle: "@${profile != null ? profile['username'] ?? 'user' : 'user'}",
+                  time: _formatTimestamp(post['created_at']),
+                  content: post['content'] ?? "",
+                  imageUrl: post['image_url'] ?? "",
+                  profileImageUrl: profile != null ? profile['avatar_url'] : null,
+                  likes: post['likes_count'] ?? 0,
+                  comments: post['comments_count'] ?? 0,
+                  isLiked: post['is_liked'] ?? false,
+                  userId: post['user_id'],
+                  isVerified: profile != null ? (profile['is_verified'] ?? false) : false,
+                ),
               );
             },
           );

@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
-import 'dart:html' as html; // Solo para Web
+import 'dart:html' as html;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -8,6 +8,9 @@ class ProfileService {
   final _supabase = Supabase.instance.client;
 
   static const String defaultAvatarUrl = 'https://yrbzkgfomjqilmyxzfqe.supabase.co/storage/v1/object/public/default/default_pfp.webp';
+  static const String defaultBannerUrl = 'https://yrbzkgfomjqilmyxzfqe.supabase.co/storage/v1/object/public/default/default_banner.jpg';
+
+  // --- STREAMS EN TIEMPO REAL ---
 
   Stream<Map<String, dynamic>> get profileStream {
     final user = _supabase.auth.currentUser;
@@ -16,81 +19,59 @@ class ProfileService {
         .from('profiles')
         .stream(primaryKey: ['id'])
         .eq('id', user.id)
-        .map((event) => event.isNotEmpty ? event.first : {});
+        .map((event) => event.isNotEmpty ? Map<String, dynamic>.from(event.first) : {});
   }
+
+  Stream<Map<String, dynamic>> getProfileStream(String userId) {
+    return _supabase
+        .from('profiles')
+        .stream(primaryKey: ['id'])
+        .eq('id', userId)
+        .map((event) => event.isNotEmpty ? Map<String, dynamic>.from(event.first) : {});
+  }
+
+  Stream<Map<String, int>> getFollowCountsStream(String userId) {
+    return _supabase
+        .from('followers')
+        .stream(primaryKey: ['follower_id', 'following_id'])
+        .map((event) {
+          final followers = event.where((f) => f['following_id'] == userId).length;
+          final following = event.where((f) => f['follower_id'] == userId).length;
+          return {'followers': followers, 'following': following};
+        });
+  }
+
+  // --- MÉTODOS DE CONSULTA ÚNICA (RESTAURADOS) ---
 
   Future<Map<String, dynamic>?> getCurrentProfile() async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return null;
-      return await _supabase.from('profiles').select('*').eq('id', user.id).single();
-    } catch (e) {
-      return null;
-    }
+      final res = await _supabase.from('profiles').select('*').eq('id', user.id).single();
+      return Map<String, dynamic>.from(res);
+    } catch (e) { return null; }
   }
 
   Future<Map<String, dynamic>?> getProfileById(String userId) async {
     try {
-      return await _supabase.from('profiles').select('*').eq('id', userId).single();
-    } catch (e) {
-      return null;
-    }
+      final res = await _supabase.from('profiles').select('*').eq('id', userId).single();
+      return Map<String, dynamic>.from(res);
+    } catch (e) { return null; }
   }
 
-  // Obtener perfil por username (@) - INSENSIBLE A MAYÚSCULAS
   Future<Map<String, dynamic>?> getProfileByUsername(String username) async {
     try {
-      final cleanUsername = username.trim();
-      final res = await _supabase
-          .from('profiles')
-          .select('*')
-          .ilike('username', cleanUsername)
-          .maybeSingle();
-      return res;
-    } catch (e) {
-      print("Error obteniendo perfil por username: $e");
-      return null;
-    }
-  }
-
-  // Búsqueda de usuarios - Añadido is_verified
-  Future<List<dynamic>> searchUsers(String query) async {
-    try {
-      var request = _supabase
-          .from('profiles')
-          .select('id, username, display_name, avatar_url, bio, is_verified, followers!followers_following_id_fkey(follower_id)');
-      
-      if (query.isNotEmpty) {
-        request = request.or('username.ilike.%$query%,display_name.ilike.%$query%');
-      }
-      
-      final res = await request.limit(20);
-      final List<dynamic> users = List.from(res as List);
-
-      users.sort((a, b) {
-        final countA = (a['followers'] as List).length;
-        final countB = (b['followers'] as List).length;
-        return countB.compareTo(countA);
-      });
-
-      return users;
-    } catch (e) {
-      print("Error buscando usuarios: $e");
-      return [];
-    }
+      final res = await _supabase.from('profiles').select('*').ilike('username', username.trim()).maybeSingle();
+      return res != null ? Map<String, dynamic>.from(res) : null;
+    } catch (e) { return null; }
   }
 
   Future<Map<String, int>> getFollowCounts(String userId) async {
     try {
       final followers = await _supabase.from('followers').select('follower_id').eq('following_id', userId);
       final following = await _supabase.from('followers').select('following_id').eq('follower_id', userId);
-      return {
-        'followers': (followers as List).length,
-        'following': (following as List).length,
-      };
-    } catch (e) {
-      return {'followers': 0, 'following': 0};
-    }
+      return {'followers': (followers as List).length, 'following': (following as List).length};
+    } catch (e) { return {'followers': 0, 'following': 0}; }
   }
 
   Future<bool> isUsernameAvailable(String username) async {
@@ -99,6 +80,61 @@ class ProfileService {
       final res = await _supabase.from('profiles').select('username').ilike('username', username.trim()).maybeSingle();
       return res == null;
     } catch (e) { return false; }
+  }
+
+  // --- ACCIONES DE PERFIL ---
+
+  Future<String?> uploadBanner(dynamic imageFile) async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return null;
+      final path = 'banners/${user.id}/banner_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      if (kIsWeb) await _supabase.storage.from('posts').uploadBinary(path, imageFile);
+      else await _supabase.storage.from('posts').upload(path, imageFile as File);
+      final url = _supabase.storage.from('posts').getPublicUrl(path);
+      await _supabase.from('profiles').update({'banner_url': url}).eq('id', user.id);
+      return url;
+    } catch (e) { return null; }
+  }
+
+  Future<String?> uploadAvatar(dynamic imageFile) async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return null;
+      final path = 'avatars/${user.id}/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      if (kIsWeb) await _supabase.storage.from('posts').uploadBinary(path, imageFile);
+      else await _supabase.storage.from('posts').upload(path, imageFile as File);
+      final url = _supabase.storage.from('posts').getPublicUrl(path);
+      await _supabase.from('profiles').update({'avatar_url': url}).eq('id', user.id);
+      return url;
+    } catch (e) { return null; }
+  }
+
+  Future<bool> updateProfile({required String username, required String displayName, String? bio, String? avatarUrl, String? bannerUrl}) async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return false;
+      final Map<String, dynamic> updates = {
+        if (username.isNotEmpty) 'username': username.toLowerCase(), 
+        if (displayName.isNotEmpty) 'display_name': displayName, 
+        if (bio != null) 'bio': bio, 
+        if (avatarUrl != null) 'avatar_url': avatarUrl,
+        if (bannerUrl != null) 'banner_url': bannerUrl
+      };
+      await _supabase.from('profiles').update(updates).eq('id', user.id);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  // --- LÓGICA SOCIAL Y SEGURIDAD ---
+
+  Future<List<dynamic>> searchUsers(String query) async {
+    try {
+      var request = _supabase.from('profiles').select('id, username, display_name, avatar_url, bio, is_verified, banner_url');
+      if (query.isNotEmpty) request = request.or('username.ilike.%$query%,display_name.ilike.%$query%');
+      final res = await request.limit(20);
+      return List.from(res as List);
+    } catch (e) { return []; }
   }
 
   Future<bool> isFollowing(String targetUserId) async {
@@ -122,73 +158,13 @@ class ProfileService {
     await _supabase.from('followers').delete().eq('follower_id', currentUserId).eq('following_id', targetUserId);
   }
 
-  Future<void> blockUser(String targetUserId) async {
-    final currentUserId = _supabase.auth.currentUser?.id;
-    if (currentUserId == null) return;
-    await _supabase.from('blocked_users').insert({'blocker_id': currentUserId, 'blocked_id': targetUserId});
-  }
-
-  Future<bool> deleteAccount() async {
-    try {
-      await _supabase.rpc('delete_user_account');
-      await _supabase.auth.signOut();
-      return true;
-    } catch (e) { return false; }
-  }
-
   Future<bool> sendPasswordResetEmail() async {
     try {
       final user = _supabase.auth.currentUser;
       if (user?.email == null) return false;
       await _supabase.auth.resetPasswordForEmail(user!.email!);
       return true;
-    } catch (e) {
-      print("Error enviando email de reset: $e");
-      return false;
-    }
-  }
-
-  Future<void> logoutOthers() async {
-    await _supabase.auth.signOut(scope: SignOutScope.others);
-  }
-
-  Future<String?> getVerificationStatus() async {
-    try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) return null;
-      final res = await _supabase
-          .from('verification_requests')
-          .select('status')
-          .eq('user_id', user.id)
-          .maybeSingle();
-      return res?['status'];
-    } catch (e) {
-      return null;
-    }
-  }
-
-  Future<bool> requestVerification() async {
-    try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) return false;
-      
-      final existing = await getVerificationStatus();
-      
-      if (existing == 'accepted' || existing == 'pending') return false;
-
-      if (existing == 'denied') {
-        await _supabase.from('verification_requests').delete().eq('user_id', user.id);
-      }
-
-      await _supabase.from('verification_requests').insert({
-        'user_id': user.id, 
-        'status': 'pending'
-      });
-      return true;
-    } catch (e) { 
-      print("Error en verificación: $e");
-      return false; 
-    }
+    } catch (e) { return false; }
   }
 
   Future<void> downloadUserDataReal() async {
@@ -206,6 +182,27 @@ class ProfileService {
     } catch (e) {}
   }
 
+  Future<String?> getVerificationStatus() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return null;
+      final res = await _supabase.from('verification_requests').select('status').eq('user_id', user.id).maybeSingle();
+      return res?['status'];
+    } catch (e) { return null; }
+  }
+
+  Future<bool> requestVerification() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return false;
+      final existing = await getVerificationStatus();
+      if (existing == 'accepted' || existing == 'pending') return false;
+      if (existing == 'denied') await _supabase.from('verification_requests').delete().eq('user_id', user.id);
+      await _supabase.from('verification_requests').insert({'user_id': user.id, 'status': 'pending'});
+      return true;
+    } catch (e) { return false; }
+  }
+
   Future<bool> updateSetting(String key, dynamic value) async {
     try {
       await _supabase.from('profiles').update({key: value}).eq('id', _supabase.auth.currentUser!.id);
@@ -213,32 +210,15 @@ class ProfileService {
     } catch (e) { return false; }
   }
 
-  Future<String?> uploadAvatar(dynamic imageFile) async {
-    try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) return null;
-      final path = 'avatars/${user.id}/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      if (kIsWeb) await _supabase.storage.from('posts').uploadBinary(path, imageFile);
-      else await _supabase.storage.from('posts').upload(path, imageFile as File);
-      return _supabase.storage.from('posts').getPublicUrl(path);
-    } catch (e) { return null; }
+  Future<void> logoutOthers() async {
+    await _supabase.auth.signOut(scope: SignOutScope.others);
   }
 
-  Future<bool> updateProfile({required String username, required String displayName, String? bio, String? avatarUrl}) async {
+  Future<bool> deleteAccount() async {
     try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) return false;
-      final Map<String, dynamic> updates = {if (username.isNotEmpty) 'username': username.toLowerCase(), if (displayName.isNotEmpty) 'display_name': displayName, if (bio != null) 'bio': bio, if (avatarUrl != null) 'avatar_url': avatarUrl};
-      await _supabase.from('profiles').update(updates).eq('id', user.id);
+      await _supabase.rpc('delete_user_account');
+      await _supabase.auth.signOut();
       return true;
     } catch (e) { return false; }
-  }
-
-  Future<List<dynamic>> getBlockedUsers() async {
-    try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) return [];
-      return await _supabase.from('blocked_users').select('*, profiles!blocked_id(username)').eq('blocker_id', user.id);
-    } catch (e) { return []; }
   }
 }

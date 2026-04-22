@@ -1,15 +1,45 @@
 import 'package:flutter/material.dart';
 import '../services/notification_service.dart';
 import '../services/profile_service.dart';
-import 'user_profile_screen.dart';
+import 'post_details_screen.dart';
 
-class NotificationsScreen extends StatelessWidget {
+class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final notificationService = NotificationService();
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
 
+class _NotificationsScreenState extends State<NotificationsScreen> {
+  final NotificationService _notificationService = NotificationService();
+
+  @override
+  void initState() {
+    super.initState();
+    // Al entrar en la pantalla, marcamos todo como leído automáticamente
+    _markAllRead();
+  }
+
+  Future<void> _markAllRead() async {
+    // Damos un pequeño respiro para que la UI se asiente antes de limpiar
+    await Future.delayed(const Duration(milliseconds: 500));
+    await _notificationService.markAllAsRead();
+  }
+
+  String _formatTimestamp(String? timestamp) {
+    if (timestamp == null) return "Reciente";
+    final date = DateTime.parse(timestamp);
+    final now = DateTime.now();
+    final difference = now.difference(date);
+    if (difference.inSeconds < 60) return "Hace unos segundos";
+    if (difference.inMinutes < 60) return "Hace ${difference.inMinutes} min";
+    if (difference.inHours < 24) return "Hace ${difference.inHours} h";
+    if (difference.inDays < 7) return "Hace ${difference.inDays} d";
+    return "${date.day}/${date.month}/${date.year}";
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Notificaciones", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -17,7 +47,7 @@ class NotificationsScreen extends StatelessWidget {
         elevation: 0,
       ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: notificationService.notificationsStream,
+        stream: _notificationService.notificationsStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)));
@@ -30,9 +60,9 @@ class NotificationsScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.notifications_off_outlined, size: 64, color: Colors.grey),
+                  Icon(Icons.notifications_none, size: 64, color: Colors.grey),
                   SizedBox(height: 16),
-                  Text("No tienes notificaciones todavía", style: TextStyle(color: Colors.grey)),
+                  Text("No tienes notificaciones todavía.", style: TextStyle(color: Colors.grey)),
                 ],
               ),
             );
@@ -40,31 +70,58 @@ class NotificationsScreen extends StatelessWidget {
 
           return ListView.builder(
             itemCount: notifications.length,
-            padding: const EdgeInsets.symmetric(vertical: 8),
             itemBuilder: (context, index) {
               final notif = notifications[index];
-              final String? fromUsername = notif['from_username'];
-              
+              final sender = notif['sender_profile'];
+              final bool isRead = notif['is_read'] ?? false;
+
+              String message = "";
+              switch (notif['type']) {
+                case 'like':
+                  message = " le dio a me gusta a tu publicación.";
+                  break;
+                case 'comment':
+                  message = " comentó tu publicación.";
+                  break;
+                case 'follow':
+                  message = " ha empezado a seguirte.";
+                  break;
+                case 'reply':
+                  message = " respondió a tu comentario.";
+                  break;
+                default:
+                  message = " interactuó contigo.";
+              }
+
               return ListTile(
-                onTap: fromUsername != null ? () {
-                  // Enlace Real: Navegación por ruta nombrada
-                  Navigator.pushNamed(context, '/user/$fromUsername');
-                } : null,
                 leading: CircleAvatar(
-                  backgroundColor: const Color(0xFF1E1E1E),
-                  backgroundImage: notif['from_avatar_url'] != null 
-                    ? NetworkImage(notif['from_avatar_url']) 
-                    : const NetworkImage(ProfileService.defaultAvatarUrl),
+                  backgroundImage: NetworkImage(sender?['avatar_url'] ?? ProfileService.defaultAvatarUrl),
                 ),
-                title: Text(
-                  notif['title'] ?? "Notificación",
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                title: RichText(
+                  text: TextSpan(
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    children: [
+                      TextSpan(text: "${sender?['username'] ?? 'Alguien'}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                      TextSpan(text: message),
+                    ],
+                  ),
                 ),
-                subtitle: Text(
-                  notif['content'] ?? "",
-                  style: const TextStyle(color: Colors.grey, fontSize: 13),
-                ),
-                trailing: const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
+                subtitle: Text(_formatTimestamp(notif['created_at']), style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                // El punto azul solo sale si no ha sido leído (se quitará solo al entrar)
+                trailing: isRead ? null : const CircleAvatar(radius: 4, backgroundColor: Color(0xFF6C63FF)),
+                onTap: () {
+                  _notificationService.markAsRead(notif['id']);
+                  if (notif['post_id'] != null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PostDetailsScreen(postId: notif['post_id'].toString()),
+                      ),
+                    );
+                  } else if (notif['type'] == 'follow') {
+                    Navigator.pushNamed(context, '/user/${sender?['username']}');
+                  }
+                },
               );
             },
           );
