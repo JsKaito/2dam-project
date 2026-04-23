@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../services/auth_service.dart';
 import '../services/profile_service.dart';
 import '../main.dart'; // Importante para el tema global
@@ -92,6 +93,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     final String secret = data['secret'] ?? '';
+    final String uri = data['uri'] ?? '';
     final String factorId = data['id'] ?? '';
     final codeController = TextEditingController();
 
@@ -100,12 +102,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context, setPanelState) => Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Text("Copia este código en tu app de autenticación:", style: TextStyle(fontSize: 13, color: Colors.grey), textAlign: TextAlign.center),
+          const Text("Escanea el código QR o copia el código secreto en tu app de autenticación:", style: TextStyle(fontSize: 13, color: Colors.grey), textAlign: TextAlign.center),
+          const SizedBox(height: 20),
+          if (uri.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: QrImageView(
+                data: uri,
+                version: QrVersions.auto,
+                size: 180.0,
+                backgroundColor: Colors.white,
+              ),
+            ),
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(12)),
-            child: SelectableText(secret, style: const TextStyle(fontFamily: 'monospace', color: Color(0xFF6C63FF), fontSize: 16, fontWeight: FontWeight.bold)),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: SelectableText(secret, textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'monospace', color: Color(0xFF6C63FF), fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.copy, size: 18, color: Colors.grey),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: secret));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Código copiado")));
+                  },
+                )
+              ],
+            ),
           ),
           const SizedBox(height: 24),
           const Text("Introduce el código de 6 dígitos que te da la app:", style: TextStyle(fontSize: 13, color: Colors.grey)),
@@ -146,22 +177,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final factors = await _profileService.getAuthenticatorFactors();
     if (factors.isEmpty) return;
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).cardColor,
-        title: const Text("¿Desactivar 2FA?"),
-        content: const Text("Tu cuenta será menos segura."),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCELAR")),
-          TextButton(onPressed: () async {
-            final id = factors.first is Map ? factors.first['id'] : factors.first.toString();
-            await _profileService.unenrollMFA(id); 
-            setState(() => _mfaEnabled = false);
-            Navigator.pop(context); 
-            Navigator.pop(context); 
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("2FA Desactivado")));
-          }, child: const Text("DESACTIVAR", style: TextStyle(color: Colors.redAccent))),
+    final String factorId = factors.first is Map ? factors.first['id'] : factors.first.toString();
+    final codeController = TextEditingController();
+
+    _showPanel(
+      title: "Desactivar 2FA",
+      builder: (context, setPanelState) => Column(
+        children: [
+          const Text("Por seguridad, introduce tu código 2FA actual para desactivar esta protección.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+          const SizedBox(height: 24),
+          TextField(
+            controller: codeController,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            textAlign: TextAlign.center,
+            style: const TextStyle(letterSpacing: 8, fontSize: 20, fontWeight: FontWeight.bold),
+            decoration: const InputDecoration(hintText: "000000", counterText: ""),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              onPressed: () async {
+                // Para desactivar, primero verificamos el código
+                final authService = AuthService();
+                final bool verified = await authService.verifyOTP(codeController.text);
+                
+                if (verified) {
+                  final ok = await _profileService.unenrollMFA(factorId); 
+                  if (ok) {
+                    setState(() => _mfaEnabled = false);
+                    Navigator.pop(context); 
+                    Navigator.pop(context); 
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("2FA Desactivado")));
+                  }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Código incorrecto")));
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+              child: const Text("VERIFICAR Y DESACTIVAR", style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          )
         ],
       ),
     );

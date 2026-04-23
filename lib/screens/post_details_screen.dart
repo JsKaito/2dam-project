@@ -83,7 +83,47 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
         comment['is_liked'] = !comment['is_liked'];
         comment['likes_count'] += comment['is_liked'] ? 1 : -1;
       });
-      // AL NO RE-ORDENAR AQUÍ, LOS COMENTARIOS SE QUEDAN EN SU SITIO
+    }
+  }
+
+  Future<void> _deleteComment(String commentId) async {
+    final bool confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Eliminar comentario"),
+        content: const Text("¿Estás seguro de que quieres eliminar este comentario?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true), 
+            child: const Text("Eliminar", style: TextStyle(color: Colors.red))
+          ),
+        ],
+      ),
+    ) ?? false;
+
+    if (confirm) {
+      final success = await _postService.deleteComment(commentId);
+      if (success) {
+        setState(() {
+          _comments.removeWhere((c) => c['id'].toString() == commentId);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Comentario eliminado"), 
+            backgroundColor: Color(0xFF6C63FF),
+            behavior: SnackBarBehavior.floating,
+          )
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Error: No se pudo eliminar el comentario. Verifica si tiene respuestas o tus permisos."),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          )
+        );
+      }
     }
   }
 
@@ -271,7 +311,6 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
   }
 
   Widget _buildCommentsList() {
-    // Ya no ordenamos aquí, usamos el orden fijo de la lista cargada
     final mainComments = _comments.where((c) => c['parent_id'] == null).toList();
 
     return ListView.builder(
@@ -281,7 +320,6 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
       itemBuilder: (context, index) {
         final comment = mainComments[index];
         final String commentId = comment['id'].toString();
-        // Las respuestas también mantienen su orden inicial
         final replies = _comments.where((c) => c['parent_id']?.toString() == commentId).toList();
 
         return Column(
@@ -298,6 +336,9 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
     final theme = Theme.of(context);
     final cProfile = comment['profiles'];
     final String commentId = comment['id'].toString();
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    final bool isMyComment = comment['user_id'] == currentUserId;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
       child: Row(
@@ -312,9 +353,20 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
                 Text(cProfile?['username'] ?? "user", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 Text(comment['content'], style: const TextStyle(fontSize: 13)),
                 const SizedBox(height: 4),
-                GestureDetector(
-                  onTap: () => setState(() { _replyingToId = commentId; _replyingToName = cProfile?['username']; _rootParentId = isMain ? commentId : rootId; }),
-                  child: const Text("Responder", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => setState(() { _replyingToId = commentId; _replyingToName = cProfile?['username']; _rootParentId = isMain ? commentId : rootId; }),
+                      child: const Text("Responder", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+                    ),
+                    if (isMyComment) ...[
+                      const SizedBox(width: 16),
+                      GestureDetector(
+                        onTap: () => _deleteComment(commentId),
+                        child: const Text("Eliminar", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),

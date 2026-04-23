@@ -171,6 +171,25 @@ class PostService {
     } catch (e) { return false; }
   }
 
+  Future<bool> deleteComment(String commentId) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return false;
+      
+      final response = await _supabase
+          .from('comments')
+          .delete()
+          .eq('id', _formatId(commentId))
+          .eq('user_id', userId)
+          .select();
+      
+      return (response as List).isNotEmpty;
+    } catch (e) { 
+      print("Error al eliminar comentario: $e");
+      return false; 
+    }
+  }
+
   // --- LÓGICA SOCIAL REFORZADA ---
 
   Future<bool> toggleLike(String postId, bool isCurrentlyLiked) async {
