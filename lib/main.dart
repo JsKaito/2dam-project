@@ -47,7 +47,6 @@ class MyApp extends StatelessWidget {
           darkTheme: _buildTheme(Brightness.dark),
           home: const AuthGuardian(),
           
-          // SISTEMA DE RUTAS CON SHORTCODES
           onGenerateRoute: (settings) {
             final name = settings.name ?? '';
             
@@ -61,7 +60,6 @@ class MyApp extends StatelessWidget {
             
             if (name.startsWith('/post/')) {
               final rawId = name.replaceFirst('/post/', '');
-              // Intentamos decodificar el shortcode si no es un número puro
               final String finalPostId = ShortcodeUtils.parseId(rawId).toString();
               
               return MaterialPageRoute(
@@ -83,6 +81,10 @@ class MyApp extends StatelessWidget {
                 return MaterialPageRoute(settings: settings, builder: (_) => const LoginScreen());
               case '/register':
                 return MaterialPageRoute(settings: settings, builder: (_) => const RegisterScreen());
+              case '/mfa-login':
+                return MaterialPageRoute(settings: settings, builder: (_) => const MFALoginScreen());
+              case '/reset-password':
+                return MaterialPageRoute(settings: settings, builder: (_) => const ResetPasswordScreen());
               default:
                 return null;
             }
