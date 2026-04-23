@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../services/profile_service.dart';
-import '../services/post_service.dart';
-import 'settings_screen.dart';
-import 'edit_profile_screen.dart';
-import 'post_details_screen.dart';
+import 'package:artists_alley/services/profile_service.dart';
+import 'package:artists_alley/services/post_service.dart';
+import 'package:artists_alley/services/shortcode_utils.dart';
+import 'package:artists_alley/screens/settings_screen.dart';
+import 'package:artists_alley/screens/edit_profile_screen.dart';
+import 'package:artists_alley/screens/user_list_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -16,6 +17,20 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final ProfileService _profileService = ProfileService();
   final PostService _postService = PostService();
+
+  void _navigateToUserList(String userId, String type) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => UserListScreen(
+          userId: userId,
+          title: type == 'followers' ? "Seguidores" : "Siguiendo",
+          type: type,
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,53 +94,76 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                   const SizedBox(height: 60),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        userData['display_name'] ?? userData['username'] ?? "Artista", 
-                        style: TextStyle(
-                          fontSize: 22, 
-                          fontWeight: FontWeight.bold, 
-                          color: theme.textTheme.titleLarge?.color
-                        )
-                      ),
-                      if (isVerified) ...[
-                        const SizedBox(width: 6),
-                        const Icon(Icons.verified, color: Colors.blue, size: 20),
-                      ],
-                    ],
-                  ),
-                  Text("@${userData['username']}", style: const TextStyle(color: Colors.grey)),
                   Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      userData['bio'] ?? "Sin biografía todavía. ✨", 
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: theme.textTheme.bodyMedium?.color),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (isVerified) const SizedBox(width: 26), 
+                            Text(
+                              userData['display_name'] ?? userData['username'] ?? "Artista", 
+                              style: TextStyle(
+                                fontSize: 22, 
+                                fontWeight: FontWeight.bold, 
+                                color: theme.textTheme.titleLarge?.color
+                              )
+                            ),
+                            if (isVerified) ...[
+                              const SizedBox(width: 6),
+                              const Icon(Icons.verified, color: Colors.blue, size: 20),
+                            ],
+                          ],
+                        ),
+                        Text("@${userData['username']}", style: const TextStyle(color: Colors.grey)),
+                        const SizedBox(height: 12),
+                        Text(
+                          userData['bio'] ?? "Sin biografía todavía. ✨", 
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: theme.textTheme.bodyMedium?.color),
+                        ),
+                      ],
                     ),
                   ),
                   
+                  const SizedBox(height: 24),
+
                   StreamBuilder<Map<String, int>>(
                     stream: _profileService.getFollowCountsStream(userId),
                     builder: (context, countSnapshot) {
                       final counts = countSnapshot.data ?? {'followers': 0, 'following': 0};
-                      return Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          StreamBuilder<List<Map<String, dynamic>>>(
-                            stream: _postService.getUserPostsStream(userId),
-                            builder: (context, postSnapshot) => _StatItem(label: "Posts", value: "${postSnapshot.data?.length ?? 0}"),
+                      return Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 400),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: StreamBuilder<List<Map<String, dynamic>>>(
+                                  stream: _postService.getUserPostsStream(userId),
+                                  builder: (context, postSnapshot) => _StatItem(label: "Posts", value: "${postSnapshot.data?.length ?? 0}"),
+                                ),
+                              ),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () => _navigateToUserList(userId, 'followers'),
+                                  child: _StatItem(label: "Seguidores", value: "${counts['followers']}"),
+                                ),
+                              ),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () => _navigateToUserList(userId, 'following'),
+                                  child: _StatItem(label: "Siguiendo", value: "${counts['following']}"),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 40),
-                          _StatItem(label: "Seguidores", value: "${counts['followers']}"),
-                          const SizedBox(width: 40),
-                          _StatItem(label: "Siguiendo", value: "${counts['following']}"),
-                        ],
+                        ),
                       );
                     }
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
+                  
                   OutlinedButton.icon(
                     onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EditProfileScreen())),
                     icon: const Icon(Icons.edit, size: 18),
@@ -134,10 +172,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       foregroundColor: theme.brightness == Brightness.dark ? Colors.white : theme.primaryColor,
                       side: BorderSide(color: theme.brightness == Brightness.dark ? Colors.grey : theme.primaryColor.withOpacity(0.5)),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                     ),
                   ),
                   
-                  // DIVIDER PEGADO AL GRID
                   const SizedBox(height: 20),
                   Divider(height: 1, thickness: 1, color: theme.dividerColor),
                   
@@ -150,7 +188,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: GridView.builder(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
-                          padding: EdgeInsets.zero, // Padding cero para que pegue al divider
+                          padding: EdgeInsets.zero,
                           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 3,
                             crossAxisSpacing: 1, 
@@ -160,10 +198,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           itemBuilder: (context, index) {
                             final post = posts[index];
                             return GestureDetector(
-                              onTap: () => Navigator.push(
-                                context, 
-                                MaterialPageRoute(builder: (context) => PostDetailsScreen(postId: post['id'].toString()))
-                              ),
+                              onTap: () {
+                                final int? idNum = int.tryParse(post['id'].toString());
+                                final String code = idNum != null ? ShortcodeUtils.encode(idNum) : post['id'].toString();
+                                Navigator.pushNamed(context, '/post/$code');
+                              },
                               child: Image.network(post['image_url'], fit: BoxFit.cover),
                             );
                           },

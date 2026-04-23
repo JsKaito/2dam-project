@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../widgets/post_card.dart';
-import '../services/post_service.dart';
+import 'package:artists_alley/widgets/post_card.dart';
+import 'package:artists_alley/services/post_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -37,9 +37,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Artist's Cottage", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("Tus artistas", style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        centerTitle: false,
+        automaticallyImplyLeading: false, // ARREGLADO: Quita la flecha de volver
       ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: _postService.getHomeFeedStream(userId),

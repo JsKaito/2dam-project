@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:artists_alley/services/profile_service.dart';
 import 'package:artists_alley/services/post_service.dart';
-import 'package:artists_alley/navigation_wrapper.dart';
+import 'package:artists_alley/services/shortcode_utils.dart';
 
 class PostCard extends StatefulWidget {
   final String username;
@@ -81,13 +81,6 @@ class _PostCardState extends State<PostCard> {
     }
   }
 
-  void _openDetails() {
-    if (widget.postId != null) {
-      // Usamos el NavigationWrapper para mostrar el post sin romper la pila de navegación
-      NavigationWrapper.navigationKey.currentState?.showPost(widget.postId!);
-    }
-  }
-
   String _formatCaptureDate(String? isoDate) {
     if (isoDate == null || isoDate.isEmpty) return '';
     try {
@@ -105,7 +98,6 @@ class _PostCardState extends State<PostCard> {
       decoration: BoxDecoration(
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor, width: 0.5),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -116,12 +108,7 @@ class _PostCardState extends State<PostCard> {
               InkWell(
                 onTap: () {
                   final cleanHandle = widget.handle.startsWith('@') ? widget.handle.substring(1) : widget.handle;
-                  // Si el perfil que pulso es el mío, voy a mi pestaña de perfil
-                  if (_isMe) {
-                    NavigationWrapper.navigationKey.currentState?.setIndex(4);
-                  } else {
-                    Navigator.pushNamed(context, '/user/$cleanHandle');
-                  }
+                  Navigator.pushNamed(context, '/user/$cleanHandle');
                 },
                 child: CircleAvatar(
                   radius: 18,
@@ -152,7 +139,12 @@ class _PostCardState extends State<PostCard> {
           ),
           const SizedBox(height: 12),
           GestureDetector(
-            onTap: _openDetails,
+            onTap: () {
+              // USAMOS EL SHORTCODE EN LA URL (ej: /post/DXaJg)
+              final int? idNum = int.tryParse(widget.postId ?? '');
+              final String code = idNum != null ? ShortcodeUtils.encode(idNum) : (widget.postId ?? '');
+              Navigator.pushNamed(context, '/post/$code');
+            },
             behavior: HitTestBehavior.opaque,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

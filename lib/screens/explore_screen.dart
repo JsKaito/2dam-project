@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:artists_alley/widgets/post_card.dart';
 import 'package:artists_alley/services/post_service.dart';
 import 'package:artists_alley/services/profile_service.dart';
-import 'package:artists_alley/screens/user_profile_screen.dart';
+import 'package:artists_alley/services/shortcode_utils.dart';
 
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
@@ -59,6 +59,7 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
+        automaticallyImplyLeading: false,
       ),
       body: Column(
         children: [
@@ -74,7 +75,7 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
                 controller: _searchController,
                 style: TextStyle(color: theme.textTheme.bodyLarge?.color),
                 decoration: const InputDecoration(
-                  hintText: "Buscar por nombre, @usuario o pie de foto...",
+                  hintText: "Buscar...",
                   hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
                   border: InputBorder.none,
                   prefixIcon: Icon(Icons.search, color: Colors.grey, size: 20),
@@ -95,7 +96,7 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
             labelStyle: const TextStyle(fontWeight: FontWeight.bold),
             tabs: const [
               Tab(text: "Cuentas"),
-              Tab(text: "Publicaciones"),
+              Tab(text: "Arte"),
             ],
           ),
           Expanded(
@@ -122,7 +123,6 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
 
         var posts = snapshot.data ?? [];
         
-        // Aplicamos el filtro de búsqueda localmente para que sea instantáneo y reactivo
         if (_searchQuery.isNotEmpty) {
           posts = posts.where((post) {
             final content = (post['content'] ?? '').toLowerCase();
@@ -207,12 +207,7 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
               subtitle: Text("@$username", style: const TextStyle(color: Colors.grey, fontSize: 13)),
               trailing: const Icon(Icons.chevron_right, color: Colors.grey, size: 18),
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => UserProfileScreen(username: username),
-                  ),
-                );
+                Navigator.pushNamed(context, '/user/$username');
               },
             );
           },

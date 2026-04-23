@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/notification_service.dart';
 import '../services/profile_service.dart';
-import 'post_details_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -47,6 +46,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         title: const Text("Notificaciones", style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        automaticallyImplyLeading: false, // ARREGLADO: Quita la flecha
       ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: _notificationService.notificationsStream,
@@ -120,12 +120,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 onTap: () {
                   _notificationService.markAsRead(notif['id']);
                   if (notif['post_id'] != null) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => PostDetailsScreen(postId: notif['post_id'].toString()),
-                      ),
-                    );
+                    Navigator.pushNamed(context, '/post/${notif['post_id']}');
                   } else if (notif['type'] == 'follow') {
                     Navigator.pushNamed(context, '/user/${sender?['username']}');
                   }

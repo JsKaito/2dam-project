@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:artists_alley/services/profile_service.dart';
 import 'package:artists_alley/services/post_service.dart';
-import 'package:artists_alley/navigation_wrapper.dart';
-import 'package:artists_alley/screens/post_details_screen.dart';
+import 'package:artists_alley/services/shortcode_utils.dart';
+import 'package:artists_alley/screens/user_list_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final String? userId;
@@ -49,11 +49,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
     _isMe = currentUserId == targetId;
 
-    // Si soy YO, redirigimos a la pestaña de perfil real para mantener la navegación coherente
     if (_isMe && mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        NavigationWrapper.navigationKey.currentState?.setIndex(4);
-        Navigator.pop(context); // Cerramos el perfil "falso"
+        Navigator.pushReplacementNamed(context, '/profile');
       });
       return;
     }
@@ -64,12 +62,40 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       _postService.getUserPostsStream(targetId).first, 
     ]);
 
-    _profile = profile;
-    _isFollowing = results[0] as bool;
-    final counts = results[1] as Map<String, int>;
-    _followersCount = counts['followers'] ?? 0;
-    _followingCount = counts['following'] ?? 0;
-    _posts = results[2] as List<dynamic>;
+    if (mounted) {
+      setState(() {
+        _profile = profile;
+        _isFollowing = results[0] as bool;
+        final counts = results[1] as Map<String, int>;
+        _followersCount = counts['followers'] ?? 0;
+        _followingCount = counts['following'] ?? 0;
+        _posts = results[2] as List<dynamic>;
+      });
+    }
+  }
+
+  void _navigateToUserList(String type) async {
+    if (_profile == null) return;
+    
+    final isPrivate = _profile!['is_private'] ?? false;
+    if (isPrivate && !_isFollowing) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Esta cuenta es privada. Sigue al artista para ver su lista."))
+      );
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => UserListScreen(
+          userId: _profile!['id'],
+          title: type == 'followers' ? "Seguidores" : "Siguiendo",
+          type: type,
+        ),
+      ),
+    );
+    _loadAllProfileData();
   }
 
   Future<void> _toggleFollow() async {
@@ -108,132 +134,210 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         }
 
         if (snapshot.hasError || _profile == null) {
-          if (_isMe) return const SizedBox.shrink(); // Evitamos flash de error si redirigimos
+          if (_isMe) return const SizedBox.shrink();
           return const Scaffold(body: Center(child: Text("Error al cargar el perfil")));
         }
 
         final displayName = _profile!['display_name'] ?? _profile!['username'] ?? "Artista";
         final isVerified = _profile!['is_verified'] ?? false;
+        final bannerUrl = _profile!['banner_url'];
+        final isPrivate = _profile!['is_private'] ?? false;
+        final userId = _profile!['id'];
 
         return Scaffold(
-          appBar: AppBar(
-            title: Text("@${_profile!['username']}", style: TextStyle(fontSize: 16, color: theme.textTheme.titleLarge?.color)),
-            centerTitle: true,
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            iconTheme: theme.appBarTheme.iconTheme,
-          ),
-          body: SingleChildScrollView(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Row(
+          backgroundColor: theme.scaffoldBackgroundColor,
+          body: RefreshIndicator(
+            onRefresh: () async {
+              setState(() {
+                _profileFuture = _loadAllProfileData();
+              });
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.center,
                     children: [
-                      CircleAvatar(
-                        radius: 45,
-                        backgroundColor: theme.brightness == Brightness.dark ? Colors.white24 : Colors.grey[200],
-                        backgroundImage: NetworkImage(_profile!['avatar_url'] ?? ProfileService.defaultAvatarUrl),
+                      Container(
+                        height: 180, 
+                        width: double.infinity, 
+                        color: theme.brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[300],
+                        child: bannerUrl != null 
+                          ? Image.network(bannerUrl, key: ValueKey(bannerUrl), fit: BoxFit.cover)
+                          : Container(color: const Color(0xFF6C63FF)),
                       ),
-                      Expanded(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            _buildStatColumn("Posts", _posts.length.toString()),
-                            _buildStatColumn("Seguidores", _followersCount.toString()),
-                            _buildStatColumn("Siguiendo", _followingCount.toString()),
-                          ],
+                      Positioned(
+                        top: 40,
+                        left: 16,
+                        child: CircleAvatar(
+                          backgroundColor: Colors.black38,
+                          child: IconButton(
+                            icon: const Icon(Icons.arrow_back, color: Colors.white),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: -50,
+                        child: CircleAvatar(
+                          radius: 55,
+                          backgroundColor: theme.scaffoldBackgroundColor,
+                          child: CircleAvatar(
+                            radius: 50,
+                            backgroundColor: Colors.white,
+                            backgroundImage: NetworkImage(_profile!['avatar_url'] ?? ProfileService.defaultAvatarUrl),
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
+                  const SizedBox(height: 60),
+                  Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(displayName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: theme.textTheme.titleLarge?.color)),
+                            if (isVerified) const SizedBox(width: 26), 
+                            Text(
+                              displayName, 
+                              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: theme.textTheme.titleLarge?.color)
+                            ),
                             if (isVerified) ...[
-                              const SizedBox(width: 4),
-                              const Icon(Icons.verified, color: Colors.blue, size: 16),
+                              const SizedBox(width: 6),
+                              const Icon(Icons.verified, color: Colors.blue, size: 20),
                             ],
                           ],
                         ),
-                        const SizedBox(height: 4),
+                        Text("@${_profile!['username']}", style: const TextStyle(color: Colors.grey)),
+                        const SizedBox(height: 12),
                         Text(
                           _profile!['bio'] ?? "Artista en Artist's Cottage ✨", 
-                          style: TextStyle(fontSize: 14, color: theme.textTheme.bodyMedium?.color)
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: theme.textTheme.bodyMedium?.color),
                         ),
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: _toggleFollow, 
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _isFollowing 
-                              ? (theme.brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[200]) 
-                              : const Color(0xFF6C63FF),
-                            foregroundColor: _isFollowing 
-                              ? (theme.brightness == Brightness.dark ? Colors.white : Colors.black) 
-                              : Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            elevation: 0,
+                  const SizedBox(height: 24),
+                  StreamBuilder<Map<String, int>>(
+                    stream: _profileService.getFollowCountsStream(userId),
+                    builder: (context, countSnapshot) {
+                      final counts = countSnapshot.data ?? {
+                        'followers': _followersCount, 
+                        'following': _followingCount
+                      };
+                      return Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 400),
+                          child: Row(
+                            children: [
+                              Expanded(child: _StatItem(label: "Posts", value: "${_posts.length}")),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () => _navigateToUserList('followers'),
+                                  child: _StatItem(label: "Seguidores", value: "${counts['followers']}"),
+                                ),
+                              ),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () => _navigateToUserList('following'),
+                                  child: _StatItem(label: "Siguiendo", value: "${counts['following']}"),
+                                ),
+                              ),
+                            ],
                           ),
-                          child: Text(_isFollowing ? "Siguiendo" : "Seguir", style: const TextStyle(fontWeight: FontWeight.bold)),
                         ),
-                      ),
-                    ],
+                      );
+                    }
                   ),
-                ),
-                const SizedBox(height: 20),
-                Divider(height: 1, thickness: 1, color: theme.dividerColor),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: EdgeInsets.zero,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 1,
-                    mainAxisSpacing: 1,
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: _toggleFollow, 
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _isFollowing 
+                                ? (theme.brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[200]) 
+                                : const Color(0xFF6C63FF),
+                              foregroundColor: _isFollowing 
+                                ? (theme.brightness == Brightness.dark ? Colors.white : Colors.black) 
+                                : Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              elevation: 0,
+                            ),
+                            child: Text(_isFollowing ? "Siguiendo" : "Seguir", style: const TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  itemCount: _posts.length,
-                  itemBuilder: (context, index) {
-                    final post = _posts[index];
-                    return GestureDetector(
-                      onTap: () => Navigator.push(
-                        context, 
-                        MaterialPageRoute(builder: (context) => PostDetailsScreen(postId: post['id'].toString()))
+                  const SizedBox(height: 20),
+                  Divider(height: 1, thickness: 1, color: theme.dividerColor),
+                  
+                  if (isPrivate && !_isFollowing)
+                    Padding(
+                      padding: const EdgeInsets.all(40),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.lock_outline, size: 64, color: Colors.grey),
+                          const SizedBox(height: 16),
+                          Text("Esta cuenta es privada", style: theme.textTheme.titleMedium),
+                          const Text("Sigue a este artista para ver sus obras.", textAlign: TextAlign.center),
+                        ],
                       ),
-                      child: Image.network(post['image_url'], fit: BoxFit.cover),
-                    );
-                  },
-                ),
-              ],
+                    )
+                  else
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        crossAxisSpacing: 1, 
+                      mainAxisSpacing: 1,
+                    ),
+                    itemCount: _posts.length,
+                    itemBuilder: (context, index) {
+                      final post = _posts[index];
+                      return GestureDetector(
+                        onTap: () {
+                          final int? idNum = int.tryParse(post['id'].toString());
+                          final String code = idNum != null ? ShortcodeUtils.encode(idNum) : post['id'].toString();
+                          Navigator.pushNamed(context, '/post/$code');
+                        },
+                        child: Image.network(post['image_url'], fit: BoxFit.cover),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         );
       },
     );
   }
+}
 
-  Widget _buildStatColumn(String label, String value) {
+class _StatItem extends StatelessWidget {
+  final String label;
+  final String value;
+  const _StatItem({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Column(
       children: [
         Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.textTheme.titleLarge?.color)),
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
       ],
     );
   }
