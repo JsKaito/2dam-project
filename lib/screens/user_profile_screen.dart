@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../services/profile_service.dart';
-import '../services/post_service.dart';
-import '../widgets/post_card.dart';
-import 'post_details_screen.dart';
+import 'package:artists_alley/services/profile_service.dart';
+import 'package:artists_alley/services/post_service.dart';
+import 'package:artists_alley/navigation_wrapper.dart';
+import 'package:artists_alley/screens/post_details_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final String? userId;
@@ -49,6 +49,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
     _isMe = currentUserId == targetId;
 
+    // Si soy YO, redirigimos a la pestaña de perfil real para mantener la navegación coherente
+    if (_isMe && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        NavigationWrapper.navigationKey.currentState?.setIndex(4);
+        Navigator.pop(context); // Cerramos el perfil "falso"
+      });
+      return;
+    }
+
     final results = await Future.wait([
       _profileService.isFollowing(targetId),
       _profileService.getFollowCounts(targetId),
@@ -89,6 +98,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return FutureBuilder(
       future: _profileFuture,
       builder: (context, snapshot) {
@@ -97,6 +108,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         }
 
         if (snapshot.hasError || _profile == null) {
+          if (_isMe) return const SizedBox.shrink(); // Evitamos flash de error si redirigimos
           return const Scaffold(body: Center(child: Text("Error al cargar el perfil")));
         }
 
@@ -105,10 +117,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
         return Scaffold(
           appBar: AppBar(
-            title: Text("@${_profile!['username']}", style: const TextStyle(fontSize: 16)),
+            title: Text("@${_profile!['username']}", style: TextStyle(fontSize: 16, color: theme.textTheme.titleLarge?.color)),
             centerTitle: true,
             backgroundColor: Colors.transparent,
             elevation: 0,
+            iconTheme: theme.appBarTheme.iconTheme,
           ),
           body: SingleChildScrollView(
             child: Column(
@@ -119,7 +132,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     children: [
                       CircleAvatar(
                         radius: 45,
-                        backgroundColor: Colors.white,
+                        backgroundColor: theme.brightness == Brightness.dark ? Colors.white24 : Colors.grey[200],
                         backgroundImage: NetworkImage(_profile!['avatar_url'] ?? ProfileService.defaultAvatarUrl),
                       ),
                       Expanded(
@@ -144,7 +157,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       children: [
                         Row(
                           children: [
-                            Text(displayName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            Text(displayName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: theme.textTheme.titleLarge?.color)),
                             if (isVerified) ...[
                               const SizedBox(width: 4),
                               const Icon(Icons.verified, color: Colors.blue, size: 16),
@@ -152,7 +165,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Text(_profile!['bio'] ?? "Artista en Artist's Cottage ✨", style: const TextStyle(fontSize: 14)),
+                        Text(
+                          _profile!['bio'] ?? "Artista en Artist's Cottage ✨", 
+                          style: TextStyle(fontSize: 14, color: theme.textTheme.bodyMedium?.color)
+                        ),
                       ],
                     ),
                   ),
@@ -160,46 +176,37 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 const SizedBox(height: 24),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: _isMe 
-                    ? SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.pushReplacementNamed(context, '/home'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            side: const BorderSide(color: Colors.grey),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _toggleFollow, 
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _isFollowing 
+                              ? (theme.brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[200]) 
+                              : const Color(0xFF6C63FF),
+                            foregroundColor: _isFollowing 
+                              ? (theme.brightness == Brightness.dark ? Colors.white : Colors.black) 
+                              : Colors.white,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            elevation: 0,
                           ),
-                          child: const Text("Ir a mi perfil", style: TextStyle(fontWeight: FontWeight.bold)),
+                          child: Text(_isFollowing ? "Siguiendo" : "Seguir", style: const TextStyle(fontWeight: FontWeight.bold)),
                         ),
-                      )
-                    : Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: _toggleFollow, 
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _isFollowing ? const Color(0xFF1E1E1E) : const Color(0xFF6C63FF),
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                elevation: 0,
-                              ),
-                              child: Text(_isFollowing ? "Siguiendo" : "Seguir", style: const TextStyle(fontWeight: FontWeight.bold)),
-                            ),
-                          ),
-                        ],
                       ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 24),
-                const Divider(color: Color(0xFF2A2A2A), height: 1),
+                const SizedBox(height: 20),
+                Divider(height: 1, thickness: 1, color: theme.dividerColor),
                 GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(2),
+                  padding: EdgeInsets.zero,
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 3,
-                    crossAxisSpacing: 2,
-                    mainAxisSpacing: 2,
+                    crossAxisSpacing: 1,
+                    mainAxisSpacing: 1,
                   ),
                   itemCount: _posts.length,
                   itemBuilder: (context, index) {
@@ -222,9 +229,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Widget _buildStatColumn(String label, String value) {
+    final theme = Theme.of(context);
     return Column(
       children: [
-        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.textTheme.titleLarge?.color)),
         Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
       ],
     );

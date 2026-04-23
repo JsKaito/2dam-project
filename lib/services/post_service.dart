@@ -51,7 +51,8 @@ class PostService {
           followingIds.add(userId);
 
           final filteredPosts = allPosts.where((post) {
-            return followingIds.contains(post['user_id']) && !_shouldFilter(post['content'] ?? '', hiddenWords);
+            final searchableText = "${post['title'] ?? ''} ${post['content'] ?? ''} ${post['author_name'] ?? ''}";
+            return followingIds.contains(post['user_id']) && !_shouldFilter(searchableText, hiddenWords);
           }).toList();
 
           return await _attachCounts(filteredPosts.map((p) => Map<String, dynamic>.from(p)).toList());
@@ -65,7 +66,10 @@ class PostService {
         .order('created_at', ascending: false)
         .asyncMap((allPosts) async {
           final hiddenWords = await _getHiddenWords();
-          final filtered = allPosts.where((post) => !_shouldFilter(post['content'] ?? '', hiddenWords)).take(30).toList();
+          final filtered = allPosts.where((post) {
+            final searchableText = "${post['title'] ?? ''} ${post['content'] ?? ''} ${post['author_name'] ?? ''}";
+            return !_shouldFilter(searchableText, hiddenWords);
+          }).take(30).toList();
           return await _attachCounts(filtered.map((p) => Map<String, dynamic>.from(p)).toList());
         });
   }
@@ -86,17 +90,19 @@ class PostService {
     
     for (var post in posts) {
       try {
+        final originalId = post['id'];
         final p = Map<String, dynamic>.from(post);
-        final likes = await _supabase.from('post_likes').select('user_id').eq('post_id', p['id']);
-        final comments = await _supabase.from('comments').select('id').eq('post_id', p['id']);
+        final likesRes = await _supabase.from('post_likes').select('user_id').eq('post_id', originalId);
+        final commentsRes = await _supabase.from('comments').select('id').eq('post_id', originalId);
         
         final profile = await _supabase.from('profiles').select('username, display_name, avatar_url, is_verified').eq('id', p['user_id']).single();
         
-        p['likes_count'] = (likes as List).length;
-        p['comments_count'] = (comments as List).length;
+        p['likes_count'] = (likesRes as List).length;
+        p['comments_count'] = (commentsRes as List).length;
         p['profiles'] = _deepClean(profile);
+        
         if (currentUserId != null) {
-          final myLike = await _supabase.from('post_likes').select().eq('post_id', p['id']).eq('user_id', currentUserId).maybeSingle();
+          final myLike = await _supabase.from('post_likes').select().eq('post_id', originalId).eq('user_id', currentUserId).maybeSingle();
           p['is_liked'] = myLike != null;
         }
         enrichedPosts.add(p);
@@ -109,16 +115,17 @@ class PostService {
 
   Future<Map<String, dynamic>?> getPostDetails(String postId) async {
     try {
-      final res = await _supabase.from('posts').select('*, profiles(*)').eq('id', _formatId(postId)).single();
+      final id = _formatId(postId);
+      final res = await _supabase.from('posts').select('*, profiles(*)').eq('id', id).single();
       final resMap = _deepClean(res);
       
-      final likesRes = await _supabase.from('post_likes').select('user_id').eq('post_id', _formatId(postId));
-      final commentsRes = await _supabase.from('comments').select('id').eq('post_id', _formatId(postId));
+      final likesRes = await _supabase.from('post_likes').select('user_id').eq('post_id', id);
+      final commentsRes = await _supabase.from('comments').select('id').eq('post_id', id);
       
       final currentUserId = _supabase.auth.currentUser?.id;
       bool isLiked = false;
       if (currentUserId != null) {
-        final isLikedRes = await _supabase.from('post_likes').select().eq('post_id', _formatId(postId)).eq('user_id', currentUserId).maybeSingle();
+        final isLikedRes = await _supabase.from('post_likes').select().eq('post_id', id).eq('user_id', currentUserId).maybeSingle();
         isLiked = isLikedRes != null;
       }
 
@@ -140,14 +147,15 @@ class PostService {
       for (var comment in res as List) {
         if (_shouldFilter(comment['content'] ?? '', hiddenWords)) continue;
         
+        final originalId = comment['id'];
         final commentMap = _deepClean(comment);
-        final likes = await _supabase.from('comment_likes').select('user_id').eq('comment_id', commentMap['id']);
+        final likesRes = await _supabase.from('comment_likes').select('user_id').eq('comment_id', originalId);
         
         if (currentUserId != null) {
-          final myLike = await _supabase.from('comment_likes').select().eq('comment_id', commentMap['id']).eq('user_id', currentUserId).maybeSingle();
+          final myLike = await _supabase.from('comment_likes').select().eq('comment_id', originalId).eq('user_id', currentUserId).maybeSingle();
           commentMap['is_liked'] = myLike != null;
         }
-        commentMap['likes_count'] = (likes as List).length;
+        commentMap['likes_count'] = (likesRes as List).length;
         enrichedComments.add(commentMap);
       }
       return enrichedComments;
@@ -163,26 +171,63 @@ class PostService {
     } catch (e) { return false; }
   }
 
-  // --- LÓGICA SOCIAL ---
+  // --- LÓGICA SOCIAL REFORZADA ---
 
   Future<bool> toggleLike(String postId, bool isCurrentlyLiked) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return false;
-      if (isCurrentlyLiked) await _supabase.from('post_likes').delete().eq('post_id', _formatId(postId)).eq('user_id', userId);
-      else await _supabase.from('post_likes').insert({'post_id': _formatId(postId), 'user_id': userId});
+      final id = _formatId(postId);
+      
+      // Consultamos el estado real para evitar conflictos
+      final existing = await _supabase.from('post_likes').select().eq('post_id', id).eq('user_id', userId).maybeSingle();
+
+      if (existing != null) {
+        await _supabase.from('post_likes').delete().eq('post_id', id).eq('user_id', userId);
+      } else {
+        await _supabase.from('post_likes').insert({'post_id': id, 'user_id': userId});
+      }
       return true;
-    } catch (e) { return false; }
+    } catch (e) { 
+      if (e.toString().contains('23505') || e.toString().contains('409')) return true;
+      return false; 
+    }
   }
 
   Future<bool> toggleCommentLike(String commentId, bool isCurrentlyLiked) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return false;
-      if (isCurrentlyLiked) await _supabase.from('comment_likes').delete().eq('comment_id', commentId).eq('user_id', userId);
-      else await _supabase.from('comment_likes').insert({'comment_id': commentId, 'user_id': userId});
+      final id = _formatId(commentId);
+      
+      // Lógica de "Autocuración": Verificamos el estado real en la DB
+      final existing = await _supabase
+          .from('comment_likes')
+          .select()
+          .eq('comment_id', id)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (existing != null) {
+        // Si el like existe en DB, lo borramos
+        await _supabase
+            .from('comment_likes')
+            .delete()
+            .eq('comment_id', id)
+            .eq('user_id', userId);
+      } else {
+        // Si no existe, lo creamos
+        await _supabase
+            .from('comment_likes')
+            .insert({'comment_id': id, 'user_id': userId});
+      }
       return true;
-    } catch (e) { return false; }
+    } catch (e) { 
+      // Manejo de carrera: si otro proceso insertó mientras comprobábamos, lo damos por bueno
+      if (e.toString().contains('23505') || e.toString().contains('409')) return true;
+      print("Error real en toggleCommentLike: $e");
+      return false; 
+    }
   }
 
   Future<bool> addComment(String postId, String content, {String? parentId, String? replyToUsername}) async {
@@ -212,17 +257,36 @@ class PostService {
     } catch (e) { return posts; }
   }
 
-  Future<bool> createPost({required String content, required dynamic imageFile}) async {
+  Future<bool> createPost({
+    required String title,
+    String? description,
+    required dynamic imageFile,
+    String? author,
+    String? captureDate,
+  }) async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return false;
       final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
       final path = '${user.id}/$fileName';
+      
       if (kIsWeb) await _supabase.storage.from('posts').uploadBinary(path, imageFile);
       else await _supabase.storage.from('posts').upload(path, imageFile as File);
+      
       final imageUrl = _supabase.storage.from('posts').getPublicUrl(path);
-      await _supabase.from('posts').insert({'user_id': user.id, 'content': content, 'image_url': imageUrl});
+      
+      await _supabase.from('posts').insert({
+        'user_id': user.id, 
+        'title': title,
+        'content': description ?? '',
+        'image_url': imageUrl,
+        'author_name': author ?? 'Artista',
+        'capture_date': captureDate,
+      });
       return true;
-    } catch (e) { return false; }
+    } catch (e) { 
+      print("Error creating post: $e");
+      return false; 
+    }
   }
 }

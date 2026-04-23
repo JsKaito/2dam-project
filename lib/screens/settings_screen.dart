@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 import '../services/profile_service.dart';
+import '../main.dart'; // Importante para el tema global
 import 'edit_profile_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -76,7 +79,120 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _profileService.updateSetting(key, value);
   }
 
+  // --- LÓGICA 2FA ---
+
+  void _showMFASetup() async {
+    setState(() => _isLoading = true);
+    final data = await _profileService.enrollMFA();
+    setState(() => _isLoading = false);
+
+    if (data == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al conectar con Supabase")));
+      return;
+    }
+
+    final String secret = data['secret'] ?? '';
+    final String factorId = data['id'] ?? '';
+    final codeController = TextEditingController();
+
+    _showPanel(
+      title: "Configurar 2FA",
+      builder: (context, setPanelState) => Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Text("Copia este código en tu app de autenticación:", style: TextStyle(fontSize: 13, color: Colors.grey), textAlign: TextAlign.center),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(12)),
+            child: SelectableText(secret, style: const TextStyle(fontFamily: 'monospace', color: Color(0xFF6C63FF), fontSize: 16, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 24),
+          const Text("Introduce el código de 6 dígitos que te da la app:", style: TextStyle(fontSize: 13, color: Colors.grey)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: codeController,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            textAlign: TextAlign.center,
+            style: const TextStyle(letterSpacing: 8, fontSize: 20, fontWeight: FontWeight.bold),
+            decoration: const InputDecoration(hintText: "000000", counterText: ""),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              onPressed: () async {
+                final ok = await _profileService.verifyAndEnableMFA(factorId, codeController.text);
+                if (ok) {
+                  setState(() => _mfaEnabled = true);
+                  Navigator.pop(context); 
+                  Navigator.pop(context); 
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("2FA Activado correctamente")));
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Código incorrecto")));
+                }
+              },
+              child: const Text("VERIFICAR Y ACTIVAR", style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _confirmDisableMFA() async {
+    final factors = await _profileService.getAuthenticatorFactors();
+    if (factors.isEmpty) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).cardColor,
+        title: const Text("¿Desactivar 2FA?"),
+        content: const Text("Tu cuenta será menos segura."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCELAR")),
+          TextButton(onPressed: () async {
+            final id = factors.first is Map ? factors.first['id'] : factors.first.toString();
+            await _profileService.unenrollMFA(id); 
+            setState(() => _mfaEnabled = false);
+            Navigator.pop(context); 
+            Navigator.pop(context); 
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("2FA Desactivado")));
+          }, child: const Text("DESACTIVAR", style: TextStyle(color: Colors.redAccent))),
+        ],
+      ),
+    );
+  }
+
   // --- SUB-PANELES ---
+
+  Future<void> _saveTheme(ThemeMode mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('theme_mode', mode == ThemeMode.light ? 'light' : 'dark');
+  }
+
+  void _showAppearancePanel() {
+    _showPanel(
+      title: "Apariencia",
+      builder: (context, setPanelState) => Column(
+        children: [
+          _buildTile(Icons.dark_mode_outlined, "Tema Oscuro", () async {
+            themeNotifier.value = ThemeMode.dark;
+            await _saveTheme(ThemeMode.dark);
+            if (mounted) Navigator.pop(context);
+          }, trailing: themeNotifier.value == ThemeMode.dark ? const Icon(Icons.check, color: Color(0xFF6C63FF)) : null),
+          _buildTile(Icons.light_mode_outlined, "Tema Claro", () async {
+            themeNotifier.value = ThemeMode.light;
+            await _saveTheme(ThemeMode.light);
+            if (mounted) Navigator.pop(context);
+          }, trailing: themeNotifier.value == ThemeMode.light ? const Icon(Icons.check, color: Color(0xFF6C63FF)) : null),
+        ],
+      ),
+    );
+  }
 
   void _showNotificationPanel() {
     _showPanel(
@@ -126,7 +242,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           TextField(
             controller: tagController,
-            style: const TextStyle(color: Colors.white),
             decoration: const InputDecoration(hintText: "ej: spam"),
             onChanged: (val) {
               if (val.endsWith(' ')) {
@@ -150,7 +265,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context, setPanelState) => Column(
         children: [
           _buildTile(Icons.lock_outline, "Cambiar contraseña", () => _requestPasswordReset()),
-          _buildSwitch("Verificación 2 Pasos (2FA)", _mfaEnabled, (v) { setPanelState(() => _mfaEnabled = v); _update('mfa_enabled', v); }),
+          _buildTile(
+            Icons.phonelink_lock, 
+            _mfaEnabled ? "Desactivar 2FA" : "Activar 2FA", 
+            () {
+              if (_mfaEnabled) _confirmDisableMFA();
+              else _showMFASetup();
+            },
+            trailing: Icon(Icons.chevron_right, size: 18, color: _mfaEnabled ? Colors.redAccent : const Color(0xFF6C63FF))
+          ),
           _buildTile(Icons.devices, "Cerrar otras sesiones", () async {
             await _profileService.logoutOthers();
             if (mounted) {
@@ -167,15 +290,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final success = await _profileService.sendPasswordResetEmail();
     if (mounted) {
       Navigator.pop(context);
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Hemos enviado un email para cambiar tu contraseña")),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Error al enviar el email de cambio de contraseña")),
-        );
-      }
+      if (success) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Email enviado")));
+      else ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al enviar")));
     }
   }
 
@@ -188,7 +304,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         else timer.cancel();
       });
       return AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: Theme.of(context).cardColor,
         title: const Text("⚠️ ELIMINACIÓN REAL", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
         content: Text("Confirmar en $sec segundos. Esta acción borrará TODO de Supabase."),
         actions: [
@@ -206,13 +322,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }));
   }
 
-  // --- UI HELPERS ---
-
   void _showPanel({required String title, required Widget Function(BuildContext, StateSetter) builder}) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E1E1E),
       isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) => StatefulBuilder(
         builder: (context, setPanelState) => Padding(
@@ -236,61 +350,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
     
-    // Traducción amigable del estado
     String statusText = "No solicitada";
     Color statusColor = Colors.grey;
     bool canRequestAgain = _verificationStatus == null || _verificationStatus == 'denied';
 
-    if (_verificationStatus == 'pending') { 
-      statusText = "En revisión..."; 
-      statusColor = Colors.orange; 
-    } else if (_verificationStatus == 'accepted') { 
-      statusText = "Verificado ✅"; 
-      statusColor = Colors.green; 
-    } else if (_verificationStatus == 'denied') { 
-      statusText = "Solicitud denegada (Toca para reintentar)"; 
-      statusColor = Colors.redAccent; 
-    }
+    if (_verificationStatus == 'pending') { statusText = "En revisión..."; statusColor = Colors.orange; }
+    else if (_verificationStatus == 'accepted') { statusText = "Verificado ✅"; statusColor = Colors.green; }
+    else if (_verificationStatus == 'denied') { statusText = "Solicitud denegada (Reintentar)"; statusColor = Colors.redAccent; }
 
     return Scaffold(
       appBar: AppBar(title: const Text("Ajustes"), centerTitle: true),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
+          _buildGroup("Apariencia", [
+            _buildTile(Icons.palette_outlined, "Tema y Estilo", _showAppearancePanel),
+          ]),
           _buildGroup("Cuenta y Seguridad", [
             _buildTile(Icons.person_outline, "Perfil", () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EditProfileScreen()))),
             _buildTile(Icons.security, "Seguridad", _showSecurityPanel),
-            
-            // BOTÓN DE VERIFICACIÓN DINÁMICO MEJORADO
             ListTile(
-              leading: Icon(
-                Icons.verified_outlined, 
-                color: _verificationStatus == 'accepted' ? Colors.blue : (_verificationStatus == 'denied' ? Colors.redAccent : Colors.white), 
-                size: 22
-              ),
+              leading: const Icon(Icons.verified_outlined, size: 22),
               title: const Text("Estado de Verificación"),
               subtitle: Text(statusText, style: TextStyle(color: statusColor, fontSize: 12)),
               trailing: canRequestAgain ? const Icon(Icons.chevron_right, size: 18) : null,
               onTap: () async {
-                if (_verificationStatus == 'pending') {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Tu solicitud está siendo revisada.")));
-                  return;
-                }
-                if (_verificationStatus == 'accepted') {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("¡Ya eres un artista verificado!")));
-                  return;
-                }
-
-                // Si es nulo o denegado, permitimos enviar
+                if (_verificationStatus == 'pending') return;
+                if (_verificationStatus == 'accepted') return;
                 final ok = await _profileService.requestVerification();
-                if (mounted) {
-                  if (ok) {
-                    setState(() => _verificationStatus = 'pending');
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Solicitud enviada correctamente")));
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al enviar la solicitud.")));
-                  }
-                }
+                if (mounted && ok) setState(() => _verificationStatus = 'pending');
               },
             ),
           ]),
@@ -313,7 +401,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildGroup(String t, List<Widget> i) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Padding(padding: const EdgeInsets.fromLTRB(16, 24, 16, 8), child: Text(t.toUpperCase(), style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold, fontSize: 11))), Container(decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(20)), child: Column(children: i))]);
-  Widget _buildTile(IconData i, String t, VoidCallback o) => ListTile(leading: Icon(i, color: Colors.white, size: 22), title: Text(t), trailing: const Icon(Icons.chevron_right, size: 18), onTap: o);
+  Widget _buildGroup(String t, List<Widget> i) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Padding(padding: const EdgeInsets.fromLTRB(16, 24, 16, 8), child: Text(t.toUpperCase(), style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold, fontSize: 11))), Container(decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(20)), child: Column(children: i))]);
+  
+  Widget _buildTile(IconData i, String t, VoidCallback o, {Widget? trailing}) => ListTile(
+    leading: Icon(i, size: 22), 
+    title: Text(t), 
+    trailing: trailing ?? const Icon(Icons.chevron_right, size: 18),
+    onTap: o
+  );
+
   Widget _buildSwitch(String t, bool v, Function(bool) c) => SwitchListTile(title: Text(t), value: v, activeColor: const Color(0xFF6C63FF), onChanged: c);
 }

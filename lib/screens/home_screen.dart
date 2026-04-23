@@ -15,14 +15,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _formatTimestamp(String? timestamp) {
     if (timestamp == null) return "Reciente";
-    final date = DateTime.parse(timestamp);
-    final now = DateTime.now();
-    final difference = now.difference(date);
-    if (difference.inSeconds < 60) return "Hace unos segundos";
-    if (difference.inMinutes < 60) return "Hace ${difference.inMinutes} min";
-    if (difference.inHours < 24) return "Hace ${difference.inHours} h";
-    if (difference.inDays < 7) return "Hace ${difference.inDays} d";
-    return "${date.day}/${date.month}/${date.year}";
+    try {
+      final date = DateTime.parse(timestamp);
+      final now = DateTime.now();
+      final difference = now.difference(date);
+      if (difference.inSeconds < 60) return "Hace unos segundos";
+      if (difference.inMinutes < 60) return "Hace ${difference.inMinutes} min";
+      if (difference.inHours < 24) return "Hace ${difference.inHours} h";
+      if (difference.inDays < 7) return "Hace ${difference.inDays} d";
+      return "${date.day}/${date.month}/${date.year}";
+    } catch (_) {
+      return "Reciente";
+    }
   }
 
   @override
@@ -37,7 +41,6 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      // CAMBIADO: StreamBuilder para Tiempo Real Real
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: _postService.getHomeFeedStream(userId),
         builder: (context, snapshot) {
@@ -74,6 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   username: profile != null ? profile['display_name'] ?? profile['username'] ?? "Artista" : "Artista",
                   handle: "@${profile != null ? profile['username'] ?? 'user' : 'user'}",
                   time: _formatTimestamp(post['created_at']),
+                  title: post['title'],
                   content: post['content'] ?? "",
                   imageUrl: post['image_url'] ?? "",
                   profileImageUrl: profile != null ? profile['avatar_url'] : null,
@@ -82,6 +86,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   isLiked: post['is_liked'] ?? false,
                   userId: post['user_id'],
                   isVerified: profile != null ? (profile['is_verified'] ?? false) : false,
+                  authorName: post['author_name'],
+                  captureDate: post['capture_date'],
                 ),
               );
             },

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../widgets/post_card.dart';
-import '../services/post_service.dart';
-import '../services/profile_service.dart';
-import 'user_profile_screen.dart';
+import 'package:artists_alley/widgets/post_card.dart';
+import 'package:artists_alley/services/post_service.dart';
+import 'package:artists_alley/services/profile_service.dart';
+import 'package:artists_alley/screens/user_profile_screen.dart';
 
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
@@ -32,8 +32,27 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
     super.dispose();
   }
 
+  String _formatTimestamp(String? timestamp) {
+    if (timestamp == null) return "Reciente";
+    try {
+      final date = DateTime.parse(timestamp);
+      final now = DateTime.now();
+      final difference = now.difference(date);
+      if (difference.inSeconds < 60) return "Hace unos segundos";
+      if (difference.inMinutes < 60) return "Hace ${difference.inMinutes} min";
+      if (difference.inHours < 24) return "Hace ${difference.inHours} h";
+      if (difference.inDays < 7) return "Hace ${difference.inDays} d";
+      return "${date.day}/${date.month}/${date.year}";
+    } catch (_) {
+      return "Reciente";
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Explorar", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -48,12 +67,12 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
             child: Container(
               height: 45,
               decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E),
+                color: isDark ? const Color(0xFF1E1E1E) : Colors.grey[200],
                 borderRadius: BorderRadius.circular(12),
               ),
               child: TextField(
                 controller: _searchController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: theme.textTheme.bodyLarge?.color),
                 decoration: const InputDecoration(
                   hintText: "Buscar por nombre, @usuario o pie de foto...",
                   hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
@@ -107,9 +126,11 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
         if (_searchQuery.isNotEmpty) {
           posts = posts.where((post) {
             final content = (post['content'] ?? '').toLowerCase();
+            final title = (post['title'] ?? '').toLowerCase();
+            final author = (post['author_name'] ?? '').toLowerCase();
             final username = (post['profiles']?['username'] ?? '').toLowerCase();
             final query = _searchQuery.toLowerCase();
-            return content.contains(query) || username.contains(query);
+            return content.contains(query) || title.contains(query) || author.contains(query) || username.contains(query);
           }).toList();
         }
 
@@ -129,7 +150,8 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
                 postId: post['id'].toString(),
                 username: profile?['display_name'] ?? profile?['username'] ?? "Artista",
                 handle: "@${profile?['username'] ?? 'user'}",
-                time: "Reciente",
+                time: _formatTimestamp(post['created_at']),
+                title: post['title'],
                 content: post['content'] ?? "",
                 imageUrl: post['image_url'] ?? "",
                 profileImageUrl: profile?['avatar_url'],
@@ -138,6 +160,8 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
                 comments: post['comments_count'] ?? 0,
                 isLiked: post['is_liked'] ?? false,
                 isVerified: profile?['is_verified'] ?? false,
+                authorName: post['author_name'],
+                captureDate: post['capture_date'],
               ),
             );
           },
@@ -147,8 +171,6 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
   }
 
   Widget _buildUsersTab() {
-    // Para los usuarios, seguimos usando FutureBuilder ya que la búsqueda de usuarios 
-    // no suele requerir streaming constante, pero al estar en el TabBarView se refresca al cambiar.
     return FutureBuilder<List<dynamic>>(
       future: _profileService.searchUsers(_searchQuery),
       builder: (context, snapshot) {

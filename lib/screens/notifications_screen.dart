@@ -40,6 +40,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text("Notificaciones", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -99,9 +101,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ),
                 title: RichText(
                   text: TextSpan(
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    style: TextStyle(
+                      color: theme.textTheme.bodyLarge?.color ?? (theme.brightness == Brightness.dark ? Colors.white : Colors.black), 
+                      fontSize: 14
+                    ),
                     children: [
-                      TextSpan(text: "${sender?['username'] ?? 'Alguien'}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                      TextSpan(
+                        text: "${sender?['username'] ?? 'Alguien'}", 
+                        style: const TextStyle(fontWeight: FontWeight.bold)
+                      ),
                       TextSpan(text: message),
                     ],
                   ),

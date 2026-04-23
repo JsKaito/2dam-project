@@ -17,18 +17,33 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login() async {
     setState(() => _isLoading = true);
-    final email = _emailController.text;
-    final password = _passwordController.text;
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
 
-    final success = await AuthService().login(email, password);
+    try {
+      final response = await AuthService().login(email, password);
 
-    if (mounted) {
-      setState(() => _isLoading = false);
-      if (success) {
-        Navigator.pushReplacementNamed(context, '/home');
-      } else {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        
+        if (response == true) {
+          // Login normal exitoso
+          Navigator.pushReplacementNamed(context, '/home');
+        } else if (response == "mfa_required") {
+          // Login parcial: Requiere el segundo factor (2FA)
+          Navigator.pushReplacementNamed(context, '/mfa-login');
+        } else {
+          // Otros fallos
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Email o contraseña incorrectos.")),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Email o contraseña incorrectos. ¿Has verificado tu email?")),
+          const SnackBar(content: Text("Error al iniciar sesión. Inténtalo de nuevo.")),
         );
       }
     }

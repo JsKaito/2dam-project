@@ -10,8 +10,7 @@ class ProfileService {
   static const String defaultAvatarUrl = 'https://yrbzkgfomjqilmyxzfqe.supabase.co/storage/v1/object/public/default/default_pfp.webp';
   static const String defaultBannerUrl = 'https://yrbzkgfomjqilmyxzfqe.supabase.co/storage/v1/object/public/default/default_banner.jpg';
 
-  // --- STREAMS EN TIEMPO REAL ---
-
+  // --- STREAMS ---
   Stream<Map<String, dynamic>> get profileStream {
     final user = _supabase.auth.currentUser;
     if (user == null) return const Stream.empty();
@@ -19,14 +18,6 @@ class ProfileService {
         .from('profiles')
         .stream(primaryKey: ['id'])
         .eq('id', user.id)
-        .map((event) => event.isNotEmpty ? Map<String, dynamic>.from(event.first) : {});
-  }
-
-  Stream<Map<String, dynamic>> getProfileStream(String userId) {
-    return _supabase
-        .from('profiles')
-        .stream(primaryKey: ['id'])
-        .eq('id', userId)
         .map((event) => event.isNotEmpty ? Map<String, dynamic>.from(event.first) : {});
   }
 
@@ -41,7 +32,78 @@ class ProfileService {
         });
   }
 
-  // --- MÉTODOS DE CONSULTA ÚNICA (RESTAURADOS) ---
+  // --- LÓGICA DE 2FA (MFA) MEJORADA ---
+
+  Future<Map<String, dynamic>?> enrollMFA() async {
+    try {
+      print("Iniciando proceso de inscripción 2FA...");
+      final res = await _supabase.auth.mfa.enroll(
+        factorType: FactorType.totp,
+        issuer: "Artist's Cottage",
+        friendlyName: _supabase.auth.currentUser?.email ?? "Usuario",
+      );
+      return {
+        'id': res.id,
+        'secret': res.totp?.secret ?? '',
+        'uri': res.totp?.uri ?? '',
+      };
+    } catch (e) {
+      // SI HAY CONFLICTO DE NOMBRE (FACTOR YA EXISTE)
+      if (e.toString().contains('mfa_factor_name_conflict')) {
+        print("Conflicto detectado. Limpiando factor antiguo...");
+        try {
+          final factors = await _supabase.auth.mfa.listFactors();
+          for (var f in factors.all) {
+            if (f.friendlyName == (_supabase.auth.currentUser?.email ?? "Usuario")) {
+              await _supabase.auth.mfa.unenroll(f.id);
+            }
+          }
+          // Reintentamos después de limpiar
+          return enrollMFA();
+        } catch (inner) {
+          print("Error limpiando conflicto: $inner");
+        }
+      }
+      print("Error en enrollMFA: $e");
+      return null;
+    }
+  }
+
+  Future<bool> verifyAndEnableMFA(String factorId, String code) async {
+    try {
+      final challenge = await _supabase.auth.mfa.challenge(factorId: factorId);
+      await _supabase.auth.mfa.verify(
+        factorId: factorId,
+        challengeId: challenge.id,
+        code: code,
+      );
+      await updateSetting('mfa_enabled', true);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> unenrollMFA(String factorId) async {
+    try {
+      await _supabase.auth.mfa.unenroll(factorId);
+      await updateSetting('mfa_enabled', false);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<List<dynamic>> getAuthenticatorFactors() async {
+    try {
+      final res = await _supabase.auth.mfa.listFactors();
+      return res.all.where((f) => f.status == FactorStatus.verified).map((f) => {'id': f.id}).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // --- MÉTODOS DE CONSULTA ---
 
   Future<Map<String, dynamic>?> getCurrentProfile() async {
     try {
@@ -81,8 +143,6 @@ class ProfileService {
       return res == null;
     } catch (e) { return false; }
   }
-
-  // --- ACCIONES DE PERFIL ---
 
   Future<String?> uploadBanner(dynamic imageFile) async {
     try {
@@ -125,8 +185,6 @@ class ProfileService {
       return true;
     } catch (e) { return false; }
   }
-
-  // --- LÓGICA SOCIAL Y SEGURIDAD ---
 
   Future<List<dynamic>> searchUsers(String query) async {
     try {
