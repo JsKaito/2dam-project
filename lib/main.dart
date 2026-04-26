@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'package:artists_alley/screens/login_screen.dart';
 import 'package:artists_alley/screens/register_screen.dart';
@@ -19,9 +20,12 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   usePathUrlStrategy();
 
+  // Cargamos las variables de entorno desde el archivo .env
+  await dotenv.load(fileName: ".env");
+
   await Supabase.initialize(
-    url: 'https://yrbzkgfomjqilmyxzfqe.supabase.co',
-    anonKey: 'sb_publishable_btZL2OIyfvGSBnbbegPR5g_VyUN1Hz8',
+    url: dotenv.env['SUPABASE_URL'] ?? '',
+    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
   );
 
   final prefs = await SharedPreferences.getInstance();

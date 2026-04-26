@@ -41,7 +41,6 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
     if (mounted && postData != null) {
       final following = await _profileService.isFollowing(postData['user_id']);
       
-      // ORDENACIÓN INICIAL: Los ordenamos por likes una sola vez al cargar
       commentsData.sort((a, b) => (b['likes_count'] ?? 0).compareTo(a['likes_count'] ?? 0));
 
       setState(() {
@@ -72,6 +71,47 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
         _post!['is_liked'] = !_post!['is_liked'];
         _post!['likes_count'] += _post!['is_liked'] ? 1 : -1;
       });
+    }
+  }
+
+  Future<void> _handleDeletePost() async {
+    final bool confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Eliminar publicación"),
+        content: const Text("¿Estás seguro de que quieres eliminar esta obra? Esta acción no se puede deshacer."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true), 
+            child: const Text("Eliminar", style: TextStyle(color: Colors.red))
+          ),
+        ],
+      ),
+    ) ?? false;
+
+    if (confirm) {
+      final success = await _postService.deletePost(widget.postId);
+      if (success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Obra eliminada correctamente"), 
+              backgroundColor: Color(0xFF6C63FF),
+              behavior: SnackBarBehavior.floating,
+            )
+          );
+          Navigator.pop(context);
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Error al eliminar la obra"),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          )
+        );
+      }
     }
   }
 
@@ -168,6 +208,14 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
         title: const Text("Galería", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          if (isMe)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+              onPressed: _handleDeletePost,
+              tooltip: "Eliminar publicación",
+            ),
+        ],
       ),
       body: Column(
         children: [
@@ -176,7 +224,6 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // PERFIL DEL AUTOR
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                     child: Row(
@@ -207,7 +254,6 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
                     ),
                   ),
 
-                  // CABECERA EDITORIAL
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
                     child: Column(
@@ -226,7 +272,6 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
                           ),
                         const SizedBox(height: 20),
                         
-                        // FICHA TÉCNICA
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(16),
@@ -248,12 +293,10 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
                     ),
                   ),
 
-                  // IMAGEN
                   InteractiveViewer(
                     child: Image.network(_post!['image_url'], width: double.infinity, fit: BoxFit.contain),
                   ),
 
-                  // ACCIONES
                   Padding(
                     padding: const EdgeInsets.all(20),
                     child: Row(
