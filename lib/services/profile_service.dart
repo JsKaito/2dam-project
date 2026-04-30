@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'dart:convert';
-import 'dart:html' as html;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+
+// Importación condicional para evitar errores en Android
+import 'package:artists_alley/services/web_download_stub.dart' if (dart.library.html) 'dart:html' as html;
 
 class ProfileService {
   final _supabase = Supabase.instance.client;
@@ -48,7 +50,6 @@ class ProfileService {
         'uri': res.totp?.uri ?? '',
       };
     } catch (e) {
-      // SI HAY CONFLICTO DE NOMBRE (FACTOR YA EXISTE)
       if (e.toString().contains('mfa_factor_name_conflict')) {
         print("Conflicto detectado. Limpiando factor antiguo...");
         try {
@@ -58,7 +59,6 @@ class ProfileService {
               await _supabase.auth.mfa.unenroll(f.id);
             }
           }
-          // Reintentamos después de limpiar
           return enrollMFA();
         } catch (inner) {
           print("Error limpiando conflicto: $inner");
@@ -227,16 +227,17 @@ class ProfileService {
 
   Future<void> downloadUserDataReal() async {
     try {
+      if (!kIsWeb) return; // No implementado en móvil por ahora
+      
       final user = _supabase.auth.currentUser;
       final profile = await getCurrentProfile();
       final Map<String, dynamic> data = {"account": {"id": user?.id, "email": user?.email}, "profile": profile};
-      if (kIsWeb) {
-        final bytes = utf8.encode(jsonEncode(data));
-        final blob = html.Blob([bytes]);
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        html.AnchorElement(href: url)..setAttribute("download", "data.json")..click();
-        html.Url.revokeObjectUrl(url);
-      }
+      
+      final bytes = utf8.encode(jsonEncode(data));
+      final blob = html.Blob([bytes]);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      html.AnchorElement(href: url)..setAttribute("download", "data.json")..click();
+      html.Url.revokeObjectUrl(url);
     } catch (e) {}
   }
 

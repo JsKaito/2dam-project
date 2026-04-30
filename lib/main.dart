@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_web_plugins/url_strategy.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+// Importación condicional para evitar errores en Android/iOS
+import 'package:flutter_web_plugins/url_strategy.dart' if (dart.library.io) 'package:artists_alley/services/web_stub.dart';
 
 import 'package:artists_alley/screens/login_screen.dart';
 import 'package:artists_alley/screens/register_screen.dart';
@@ -10,7 +13,6 @@ import 'package:artists_alley/screens/user_profile_screen.dart';
 import 'package:artists_alley/screens/post_details_screen.dart';
 import 'package:artists_alley/screens/reset_password_screen.dart';
 import 'package:artists_alley/screens/mfa_login_screen.dart';
-import 'package:artists_alley/screens/user_list_screen.dart';
 import 'package:artists_alley/navigation_wrapper.dart';
 import 'package:artists_alley/services/shortcode_utils.dart';
 
@@ -18,7 +20,10 @@ final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  usePathUrlStrategy();
+  
+  if (kIsWeb) {
+    usePathUrlStrategy();
+  }
 
   // Cargamos las variables de entorno desde el archivo .env
   await dotenv.load(fileName: ".env");
