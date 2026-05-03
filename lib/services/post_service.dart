@@ -65,12 +65,42 @@ class PostService {
         .stream(primaryKey: ['id'])
         .order('created_at', ascending: false)
         .asyncMap((allPosts) async {
+          final currentUserId = _supabase.auth.currentUser?.id;
           final hiddenWords = await _getHiddenWords();
-          final filtered = allPosts.where((post) {
+          
+          // Obtenemos IDs de personas que el usuario ya sigue
+          List<String> followingIds = [];
+          if (currentUserId != null) {
+            final followingData = await _supabase.from('followers').select('following_id').eq('follower_id', currentUserId);
+            followingIds = (followingData as List).map((f) => f['following_id'] as String).toList();
+            followingIds.add(currentUserId);
+          }
+
+          // Filtramos posts de cuentas privadas que NO seguimos
+          // Nota: Requiere que el perfil se una o se verifique is_private
+          final List<Map<String, dynamic>> filtered = [];
+          
+          for (var post in allPosts) {
             final searchableText = "${post['title'] ?? ''} ${post['content'] ?? ''} ${post['author_name'] ?? ''}";
-            return !_shouldFilter(searchableText, hiddenWords);
-          }).take(30).toList();
-          return await _attachCounts(filtered.map((p) => Map<String, dynamic>.from(p)).toList());
+            if (_shouldFilter(searchableText, hiddenWords)) continue;
+
+            // Verificamos si la cuenta es privada
+            final profileRes = await _supabase.from('profiles').select('is_private').eq('id', post['user_id']).maybeSingle();
+            final bool isPrivate = profileRes?['is_private'] ?? false;
+
+            if (isPrivate) {
+              // Si es privada, solo la mostramos si la seguimos o es nuestra
+              if (followingIds.contains(post['user_id'])) {
+                filtered.add(Map<String, dynamic>.from(post));
+              }
+            } else {
+              filtered.add(Map<String, dynamic>.from(post));
+            }
+
+            if (filtered.length >= 30) break;
+          }
+
+          return await _attachCounts(filtered);
         });
   }
 
@@ -95,7 +125,7 @@ class PostService {
         final likesRes = await _supabase.from('post_likes').select('user_id').eq('post_id', originalId);
         final commentsRes = await _supabase.from('comments').select('id').eq('post_id', originalId);
         
-        final profile = await _supabase.from('profiles').select('username, display_name, avatar_url, is_verified').eq('id', p['user_id']).single();
+        final profile = await _supabase.from('profiles').select('username, display_name, avatar_url, is_verified, is_private').eq('id', p['user_id']).single();
         
         p['likes_count'] = (likesRes as List).length;
         p['comments_count'] = (commentsRes as List).length;
@@ -270,7 +300,7 @@ class PostService {
     if (posts.isEmpty) return [];
     try {
       final List<String> userIds = posts.map((p) => p['user_id'] as String).toSet().toList();
-      final profilesData = await _supabase.from('profiles').select('id, username, display_name, avatar_url, is_verified').inFilter('id', userIds);
+      final profilesData = await _supabase.from('profiles').select('id, username, display_name, avatar_url, is_verified, is_private').inFilter('id', userIds);
       final Map<String, dynamic> profilesMap = {for (var p in profilesData) p['id']: _deepClean(p)};
       return posts.map((post) => {...post, 'profiles': profilesMap[post['user_id']]}).toList();
     } catch (e) { return posts; }

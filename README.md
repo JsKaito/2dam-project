@@ -1,4 +1,4 @@
-# artists_alley
+# artists_cottage
 
 Project for Artist's Alley website.
 

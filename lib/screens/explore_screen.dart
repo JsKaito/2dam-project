@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:artists_alley/widgets/post_card.dart';
-import 'package:artists_alley/services/post_service.dart';
-import 'package:artists_alley/services/profile_service.dart';
-import 'package:artists_alley/services/shortcode_utils.dart';
+import 'package:artists_cottage/widgets/post_card.dart';
+import 'package:artists_cottage/services/post_service.dart';
+import 'package:artists_cottage/services/profile_service.dart';
+import 'package:artists_cottage/services/shortcode_utils.dart';
 
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:artists_alley/services/post_service.dart';
-import 'package:artists_alley/services/profile_service.dart';
-import 'package:artists_alley/navigation_wrapper.dart';
+import 'package:artists_cottage/services/post_service.dart';
+import 'package:artists_cottage/services/profile_service.dart';
+import 'package:artists_cottage/screens/fullscreen_image_screen.dart';
+import 'package:artists_cottage/services/shortcode_utils.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:flutter/services.dart';
 
 class PostDetailsScreen extends StatefulWidget {
   final String postId;
@@ -71,6 +73,28 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
         _post!['is_liked'] = !_post!['is_liked'];
         _post!['likes_count'] += _post!['is_liked'] ? 1 : -1;
       });
+    }
+  }
+
+  void _handleShare() async {
+    if (_post == null) return;
+    final int? idNum = int.tryParse(widget.postId);
+    final String code = idNum != null ? ShortcodeUtils.encode(idNum) : widget.postId;
+    
+    // URL usando localhost como pediste
+    final String postUrl = "http://localhost:8080/post/$code";
+    final String username = _post!['profiles']?['username'] ?? 'artista';
+    final String text = 'Mira este post de $username en Artist\'s Alley: $postUrl';
+
+    try {
+      await Share.share(text, subject: 'Post compartido: ${_post!['title'] ?? 'Sin título'}');
+    } catch (e) {
+      await Clipboard.setData(ClipboardData(text: text));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Enlace del post copiado"))
+        );
+      }
     }
   }
 
@@ -247,7 +271,12 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
                             onPressed: _toggleFollow,
                             child: Text(
                               _isFollowing ? "Siguiendo" : "Seguir",
-                              style: TextStyle(fontWeight: FontWeight.bold, color: _isFollowing ? Colors.grey : theme.primaryColor),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold, 
+                                color: _isFollowing 
+                                  ? (isDark ? Colors.white70 : Colors.black54) 
+                                  : const Color(0xFF6C63FF)
+                              ),
                             ),
                           ),
                       ],
@@ -293,7 +322,15 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
                     ),
                   ),
 
-                  InteractiveViewer(
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => FullscreenImageScreen(imageUrl: _post!['image_url']),
+                        ),
+                      );
+                    },
                     child: Image.network(_post!['image_url'], width: double.infinity, fit: BoxFit.contain),
                   ),
 
@@ -308,15 +345,20 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
                           _handleLike
                         ),
                         const Spacer(),
-                        IconButton(icon: const Icon(Icons.ios_share), onPressed: () {}),
+                        IconButton(
+                          icon: const Icon(Icons.share_outlined, color: Colors.grey, size: 24),
+                          onPressed: _handleShare,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
                       ],
                     ),
                   ),
                   
                   const Divider(),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    child: Text("COMENTARIOS", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    child: Text("COMENTARIOS (${_comments.length})", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
                   ),
                   _buildCommentsList(),
                 ],

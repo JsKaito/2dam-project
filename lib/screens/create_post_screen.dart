@@ -6,7 +6,8 @@ import '../services/post_service.dart';
 import '../services/profile_service.dart';
 
 class CreatePostScreen extends StatefulWidget {
-  const CreatePostScreen({super.key});
+  final bool isIntegrated;
+  const CreatePostScreen({super.key, this.isIntegrated = false});
 
   @override
   State<CreatePostScreen> createState() => _CreatePostScreenState();
@@ -104,8 +105,20 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       if (mounted) {
         setState(() => _isUploading = false);
         if (success) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("¡Obra publicada con éxito!")));
+          // Si está integrado, no podemos hacer pop, quizás limpiar los campos o ir a home
+          if (widget.isIntegrated) {
+             _titleController.clear();
+             _descriptionController.clear();
+             _authorNameController.clear();
+             setState(() {
+               _selectedImage = null;
+               _captureDate = null;
+             });
+             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("¡Obra publicada con éxito!")));
+          } else {
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("¡Obra publicada con éxito!")));
+          }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al publicar")));
         }
@@ -125,7 +138,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+        leading: widget.isIntegrated ? null : IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
         title: const Text("Nueva Publicación", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         actions: [
           Padding(
@@ -142,7 +155,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // ÁREA DE IMAGEN Y TEXTOS (Estilo Instagram)
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Row(
@@ -201,7 +213,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             
             const Divider(),
             
-            // CONFIGURACIONES ADICIONALES
             _buildListTile(
               icon: Icons.calendar_today_outlined,
               title: "Fecha de captura",

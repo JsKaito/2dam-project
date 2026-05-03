@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:artists_alley/services/profile_service.dart';
+import 'package:artists_cottage/services/profile_service.dart';
 
 class UserListScreen extends StatefulWidget {
   final String userId;

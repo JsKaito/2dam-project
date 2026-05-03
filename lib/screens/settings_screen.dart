@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../services/auth_service.dart';
 import '../services/profile_service.dart';
-import '../main.dart'; // Importante para el tema global
+import '../main.dart'; 
 import 'edit_profile_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -78,6 +78,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (key == 'tag_approval_required') _tagApprovalRequired = value;
     });
     await _profileService.updateSetting(key, value);
+  }
+
+  // --- LÓGICA DE PRIVACIDAD MEJORADA ---
+
+  void _confirmTogglePrivacy(StateSetter setPanelState) {
+    final bool willBePrivate = !_isPrivate;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(willBePrivate ? "¿Cambiar a cuenta privada?" : "¿Cambiar a cuenta pública?"),
+        content: Text(
+          willBePrivate 
+            ? "Solo las personas que apruebes podrán ver tus fotos y vídeos. Tus seguidores actuales no se verán afectados."
+            : "Cualquier persona podrá ver tus publicaciones y seguirte sin necesidad de aprobación.",
+          style: const TextStyle(fontSize: 14, color: Colors.grey),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("CANCELAR", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setPanelState(() => _isPrivate = willBePrivate);
+              _update('is_private', willBePrivate);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6C63FF),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(willBePrivate ? "CAMBIAR A PRIVADA" : "CAMBIAR A PÚBLICA"),
+          ),
+        ],
+      ),
+    );
   }
 
   // --- LÓGICA 2FA ---
@@ -200,7 +238,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             height: 50,
             child: ElevatedButton(
               onPressed: () async {
-                // Para desactivar, primero verificamos el código
                 final authService = AuthService();
                 final bool verified = await authService.verifyOTP(codeController.text);
                 
@@ -271,7 +308,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       title: "Privacidad y Etiquetas",
       builder: (context, setPanelState) => Column(
         children: [
-          _buildSwitch("Cuenta Privada", _isPrivate, (v) { setPanelState(() => _isPrivate = v); _update('is_private', v); }),
+          ListTile(
+            title: const Text("Cuenta Privada", style: TextStyle(fontSize: 15)),
+            subtitle: Text(_isPrivate ? "Activada" : "Desactivada", style: TextStyle(color: _isPrivate ? const Color(0xFF6C63FF) : Colors.grey, fontSize: 12)),
+            trailing: Icon(_isPrivate ? Icons.lock : Icons.lock_open, size: 20, color: _isPrivate ? const Color(0xFF6C63FF) : Colors.grey),
+            contentPadding: EdgeInsets.zero,
+            onTap: () => _confirmTogglePrivacy(setPanelState),
+          ),
+          const Divider(height: 32),
           _buildSwitch("Aprobación de etiquetas", _tagApprovalRequired, (v) { setPanelState(() => _tagApprovalRequired = v); _update('tag_approval_required', v); }),
         ],
       ),

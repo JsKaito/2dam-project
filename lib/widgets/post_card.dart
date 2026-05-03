@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:artists_alley/services/profile_service.dart';
-import 'package:artists_alley/services/post_service.dart';
-import 'package:artists_alley/services/shortcode_utils.dart';
+import 'package:artists_cottage/services/profile_service.dart';
+import 'package:artists_cottage/services/post_service.dart';
+import 'package:artists_cottage/services/shortcode_utils.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:flutter/services.dart';
 
 class PostCard extends StatefulWidget {
   final String username;
@@ -46,24 +48,15 @@ class PostCard extends StatefulWidget {
 
 class _PostCardState extends State<PostCard> {
   final PostService _postService = PostService();
-  final ProfileService _profileService = ProfileService();
   
   late bool _liked;
   late int _likesCount;
-  bool _isMe = false;
 
   @override
   void initState() {
     super.initState();
     _liked = widget.isLiked;
     _likesCount = widget.likes;
-    _checkStatus();
-  }
-
-  void _checkStatus() async {
-    final myId = Supabase.instance.client.auth.currentUser?.id;
-    if (myId == null) return;
-    _isMe = myId == widget.userId;
   }
 
   Future<void> _handleLike() async {
@@ -78,6 +71,26 @@ class _PostCardState extends State<PostCard> {
         _liked = !_liked;
         _likesCount += _liked ? 1 : -1;
       });
+    }
+  }
+
+  void _handleShare() async {
+    final int? idNum = int.tryParse(widget.postId ?? '');
+    final String code = idNum != null ? ShortcodeUtils.encode(idNum) : (widget.postId ?? '');
+    
+    // URL usando localhost como pediste
+    final String postUrl = "http://localhost:8080/post/$code";
+    final String text = 'Mira este post de ${widget.username} en Artist\'s Alley: $postUrl';
+
+    try {
+      await Share.share(text, subject: 'Post compartido: ${widget.title ?? 'Sin título'}');
+    } catch (e) {
+      await Clipboard.setData(ClipboardData(text: text));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Enlace del post copiado"))
+        );
+      }
     }
   }
 
@@ -140,7 +153,6 @@ class _PostCardState extends State<PostCard> {
           const SizedBox(height: 12),
           GestureDetector(
             onTap: () {
-              // USAMOS EL SHORTCODE EN LA URL (ej: /post/DXaJg)
               final int? idNum = int.tryParse(widget.postId ?? '');
               final String code = idNum != null ? ShortcodeUtils.encode(idNum) : (widget.postId ?? '');
               Navigator.pushNamed(context, '/post/$code');
@@ -189,8 +201,28 @@ class _PostCardState extends State<PostCard> {
                         ],
                       ),
                     ),
+                    const SizedBox(width: 16),
+                    InkWell(
+                      onTap: () {
+                         final int? idNum = int.tryParse(widget.postId ?? '');
+                         final String code = idNum != null ? ShortcodeUtils.encode(idNum) : (widget.postId ?? '');
+                         Navigator.pushNamed(context, '/post/$code');
+                      },
+                      child: Row(
+                        children: [
+                          const Icon(Icons.mode_comment_outlined, size: 19, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Text("${widget.comments}", style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                        ],
+                      ),
+                    ),
                     const Spacer(),
-                    const Icon(Icons.share_outlined, size: 18, color: Colors.grey),
+                    IconButton(
+                      icon: const Icon(Icons.share_outlined, size: 20, color: Colors.grey),
+                      onPressed: _handleShare,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
                   ],
                 ),
               ],

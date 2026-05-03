@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:artists_alley/services/profile_service.dart';
-import 'package:artists_alley/services/post_service.dart';
-import 'package:artists_alley/services/shortcode_utils.dart';
-import 'package:artists_alley/screens/user_list_screen.dart';
+import 'package:artists_cottage/services/profile_service.dart';
+import 'package:artists_cottage/services/post_service.dart';
+import 'package:artists_cottage/services/shortcode_utils.dart';
+import 'package:artists_cottage/screens/user_list_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final String? userId;

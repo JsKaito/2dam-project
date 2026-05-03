@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:artists_alley/widgets/post_card.dart';
-import 'package:artists_alley/services/post_service.dart';
+import 'package:artists_cottage/widgets/post_card.dart';
+import 'package:artists_cottage/services/post_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});

@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 // Importación condicional para evitar errores en Android
-import 'package:artists_alley/services/web_download_stub.dart' if (dart.library.html) 'dart:html' as html;
+import 'package:artists_cottage/services/web_download_stub.dart' if (dart.library.html) 'dart:html' as html;
 
 class ProfileService {
   final _supabase = Supabase.instance.client;

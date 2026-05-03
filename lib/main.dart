@@ -5,16 +5,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // Importación condicional para evitar errores en Android/iOS
-import 'package:flutter_web_plugins/url_strategy.dart' if (dart.library.io) 'package:artists_alley/services/web_stub.dart';
+import 'package:flutter_web_plugins/url_strategy.dart' if (dart.library.io) 'package:artists_cottage/services/web_stub.dart';
 
-import 'package:artists_alley/screens/login_screen.dart';
-import 'package:artists_alley/screens/register_screen.dart';
-import 'package:artists_alley/screens/user_profile_screen.dart';
-import 'package:artists_alley/screens/post_details_screen.dart';
-import 'package:artists_alley/screens/reset_password_screen.dart';
-import 'package:artists_alley/screens/mfa_login_screen.dart';
-import 'package:artists_alley/navigation_wrapper.dart';
-import 'package:artists_alley/services/shortcode_utils.dart';
+import 'package:artists_cottage/screens/login_screen.dart';
+import 'package:artists_cottage/screens/register_screen.dart';
+import 'package:artists_cottage/screens/user_profile_screen.dart';
+import 'package:artists_cottage/screens/post_details_screen.dart';
+import 'package:artists_cottage/screens/reset_password_screen.dart';
+import 'package:artists_cottage/screens/mfa_login_screen.dart';
+import 'package:artists_cottage/navigation_wrapper.dart';
+import 'package:artists_cottage/services/shortcode_utils.dart';
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 
