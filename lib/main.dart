@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // Importación condicional para evitar errores en Android/iOS
 import 'package:flutter_web_plugins/url_strategy.dart' if (dart.library.io) 'package:artists_cottage/services/web_stub.dart';
@@ -25,12 +24,10 @@ void main() async {
     usePathUrlStrategy();
   }
 
-  // Cargamos las variables de entorno desde el archivo .env
-  await dotenv.load(fileName: ".env");
-
+  // Inicialización directa con la clave correcta de Supabase
   await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL'] ?? '',
-    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
+    url: 'https://yrbzkgfomjqilmyxzfqe.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlyYnprZ2ZvbWpxaWxteXh6ZnFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMDc4NjAsImV4cCI6MjA5MTY4Mzg2MH0.TAQZz_6shAIiY9FIVYCVk4-2hGtR4pehgIGAA_igxcg',
   );
 
   final prefs = await SharedPreferences.getInstance();

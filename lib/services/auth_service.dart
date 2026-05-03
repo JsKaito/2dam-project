@@ -7,7 +7,6 @@ class AuthService {
 
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  // REGISTRO RESTAURADO
   Future<bool> register(String email, String password, String username) async {
     try {
       final response = await _supabase.auth.signUp(
@@ -22,7 +21,6 @@ class AuthService {
     }
   }
 
-  // LOGIN CON FORZADO DE MFA
   Future<dynamic> login(String email, String password) async {
     try {
       final response = await _supabase.auth.signInWithPassword(
@@ -44,9 +42,9 @@ class AuthService {
       return false;
     } on AuthException catch (e) {
       if (e.message.contains("mfa")) return "mfa_required";
-      return false;
+      return e.message; // Devolvemos el mensaje de error real de Supabase
     } catch (e) {
-      return false;
+      return "Error de conexión: $e"; // Error de red o similar
     }
   }
 

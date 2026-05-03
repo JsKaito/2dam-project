@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:artists_cottage/services/profile_service.dart';
 import 'package:artists_cottage/services/post_service.dart';
@@ -22,19 +23,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   bool _isFollowing = false;
   bool _isMe = false;
   Map<String, dynamic>? _profile;
-  List<dynamic> _posts = [];
   int _followersCount = 0;
   int _followingCount = 0;
 
-  late Future<void> _profileFuture;
+  late Future<void> _initFuture;
 
   @override
   void initState() {
     super.initState();
-    _profileFuture = _loadAllProfileData();
+    _initFuture = _loadInitialData();
   }
 
-  Future<void> _loadAllProfileData() async {
+  Future<void> _loadInitialData() async {
     Map<String, dynamic>? profile;
     
     if (widget.userId != null) {
@@ -43,7 +43,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       profile = await _profileService.getProfileByUsername(widget.username!);
     }
 
-    if (profile == null) throw Exception("Usuario no encontrado");
+    if (profile == null) return;
 
     final String targetId = profile['id'];
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
@@ -59,7 +59,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final results = await Future.wait([
       _profileService.isFollowing(targetId),
       _profileService.getFollowCounts(targetId),
-      _postService.getUserPostsStream(targetId).first, 
     ]);
 
     if (mounted) {
@@ -69,7 +68,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         final counts = results[1] as Map<String, int>;
         _followersCount = counts['followers'] ?? 0;
         _followingCount = counts['following'] ?? 0;
-        _posts = results[2] as List<dynamic>;
       });
     }
   }
@@ -95,7 +93,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ),
       ),
     );
-    _loadAllProfileData();
+    _loadInitialData();
   }
 
   Future<void> _toggleFollow() async {
@@ -127,15 +125,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final theme = Theme.of(context);
 
     return FutureBuilder(
-      future: _profileFuture,
+      future: _initFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting && _profile == null) {
           return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))));
         }
 
-        if (snapshot.hasError || _profile == null) {
-          if (_isMe) return const SizedBox.shrink();
-          return const Scaffold(body: Center(child: Text("Error al cargar el perfil")));
+        if (_profile == null) {
+          return const Scaffold(body: Center(child: Text("Usuario no encontrado")));
         }
 
         final displayName = _profile!['display_name'] ?? _profile!['username'] ?? "Artista";
@@ -148,9 +145,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           backgroundColor: theme.scaffoldBackgroundColor,
           body: RefreshIndicator(
             onRefresh: () async {
-              setState(() {
-                _profileFuture = _loadAllProfileData();
-              });
+              setState(() { _initFuture = _loadInitialData(); });
+              await _initFuture;
             },
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -165,7 +161,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         width: double.infinity, 
                         color: theme.brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[300],
                         child: bannerUrl != null 
-                          ? Image.network(bannerUrl, key: ValueKey(bannerUrl), fit: BoxFit.cover)
+                          ? CachedNetworkImage(
+                              imageUrl: bannerUrl,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(color: Colors.transparent),
+                            )
                           : Container(color: const Color(0xFF6C63FF)),
                       ),
                       Positioned(
@@ -187,7 +187,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           child: CircleAvatar(
                             radius: 50,
                             backgroundColor: Colors.white,
-                            backgroundImage: NetworkImage(_profile!['avatar_url'] ?? ProfileService.defaultAvatarUrl),
+                            backgroundImage: CachedNetworkImageProvider(_profile!['avatar_url'] ?? ProfileService.defaultAvatarUrl),
                           ),
                         ),
                       ),
@@ -204,7 +204,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             if (isVerified) const SizedBox(width: 26), 
                             Text(
                               displayName, 
-                              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: theme.textTheme.titleLarge?.color)
+                              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)
                             ),
                             if (isVerified) ...[
                               const SizedBox(width: 6),
@@ -217,7 +217,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         Text(
                           _profile!['bio'] ?? "Artista en Artist's Cottage ✨", 
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: theme.textTheme.bodyMedium?.color),
                         ),
                       ],
                     ),
@@ -235,7 +234,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           constraints: const BoxConstraints(maxWidth: 400),
                           child: Row(
                             children: [
-                              Expanded(child: _StatItem(label: "Posts", value: "${_posts.length}")),
+                              Expanded(
+                                child: StreamBuilder<List<Map<String, dynamic>>>(
+                                  stream: _postService.getUserPostsStream(userId),
+                                  builder: (context, postSnapshot) => _StatItem(label: "Posts", value: "${postSnapshot.data?.length ?? 0}"),
+                                ),
+                              ),
                               Expanded(
                                 child: InkWell(
                                   onTap: () => _navigateToUserList('followers'),
@@ -294,28 +298,41 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       ),
                     )
                   else
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      padding: EdgeInsets.zero,
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        crossAxisSpacing: 1, 
-                      mainAxisSpacing: 1,
+                    StreamBuilder<List<Map<String, dynamic>>>(
+                      stream: _postService.getUserPostsStream(userId),
+                      builder: (context, postSnapshot) {
+                        final posts = postSnapshot.data ?? [];
+                        if (posts.isEmpty && postSnapshot.connectionState == ConnectionState.waiting) {
+                          return const Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator());
+                        }
+                        return GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          padding: EdgeInsets.zero,
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 1, 
+                            mainAxisSpacing: 1,
+                          ),
+                          itemCount: posts.length,
+                          itemBuilder: (context, index) {
+                            final post = posts[index];
+                            return GestureDetector(
+                              onTap: () {
+                                final int? idNum = int.tryParse(post['id'].toString());
+                                final String code = idNum != null ? ShortcodeUtils.encode(idNum) : post['id'].toString();
+                                Navigator.pushNamed(context, '/post/$code');
+                              },
+                              child: CachedNetworkImage(
+                                imageUrl: post['image_url'],
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(color: theme.brightness == Brightness.dark ? Colors.white10 : Colors.black12),
+                              ),
+                            );
+                          },
+                        );
+                      }
                     ),
-                    itemCount: _posts.length,
-                    itemBuilder: (context, index) {
-                      final post = _posts[index];
-                      return GestureDetector(
-                        onTap: () {
-                          final int? idNum = int.tryParse(post['id'].toString());
-                          final String code = idNum != null ? ShortcodeUtils.encode(idNum) : post['id'].toString();
-                          Navigator.pushNamed(context, '/post/$code');
-                        },
-                        child: Image.network(post['image_url'], fit: BoxFit.cover),
-                      );
-                    },
-                  ),
                 ],
               ),
             ),
@@ -333,10 +350,9 @@ class _StatItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Column(
       children: [
-        Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.textTheme.titleLarge?.color)),
+        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
       ],
     );

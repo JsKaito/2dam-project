@@ -37,7 +37,7 @@ class PostService {
     return false;
   }
 
-  // --- STREAMS EN TIEMPO REAL ---
+  // --- STREAMS OPTIMIZADOS ---
 
   Stream<List<Map<String, dynamic>>> getHomeFeedStream(String userId) {
     return _supabase
@@ -45,9 +45,14 @@ class PostService {
         .stream(primaryKey: ['id'])
         .order('created_at', ascending: false)
         .asyncMap((allPosts) async {
-          final hiddenWords = await _getHiddenWords();
-          final followingData = await _supabase.from('followers').select('following_id').eq('follower_id', userId);
-          final followingIds = (followingData as List).map((f) => f['following_id'] as String).toList();
+          final results = await Future.wait<dynamic>([
+            _getHiddenWords(),
+            _supabase.from('followers').select('following_id').eq('follower_id', userId),
+          ]);
+
+          final hiddenWords = results[0] as List<String>;
+          final followingData = results[1] as List;
+          final followingIds = followingData.map((f) => f['following_id'] as String).toList();
           followingIds.add(userId);
 
           final filteredPosts = allPosts.where((post) {
@@ -68,7 +73,6 @@ class PostService {
           final currentUserId = _supabase.auth.currentUser?.id;
           final hiddenWords = await _getHiddenWords();
           
-          // Obtenemos IDs de personas que el usuario ya sigue
           List<String> followingIds = [];
           if (currentUserId != null) {
             final followingData = await _supabase.from('followers').select('following_id').eq('follower_id', currentUserId);
@@ -76,31 +80,31 @@ class PostService {
             followingIds.add(currentUserId);
           }
 
-          // Filtramos posts de cuentas privadas que NO seguimos
-          // Nota: Requiere que el perfil se una o se verifique is_private
-          final List<Map<String, dynamic>> filtered = [];
-          
+          final List<Map<String, dynamic>> initialCandidates = [];
           for (var post in allPosts) {
-            final searchableText = "${post['title'] ?? ''} ${post['content'] ?? ''} ${post['author_name'] ?? ''}";
-            if (_shouldFilter(searchableText, hiddenWords)) continue;
-
-            // Verificamos si la cuenta es privada
-            final profileRes = await _supabase.from('profiles').select('is_private').eq('id', post['user_id']).maybeSingle();
-            final bool isPrivate = profileRes?['is_private'] ?? false;
-
-            if (isPrivate) {
-              // Si es privada, solo la mostramos si la seguimos o es nuestra
-              if (followingIds.contains(post['user_id'])) {
-                filtered.add(Map<String, dynamic>.from(post));
-              }
-            } else {
-              filtered.add(Map<String, dynamic>.from(post));
+            final text = "${post['title'] ?? ''} ${post['content'] ?? ''}";
+            if (!_shouldFilter(text, hiddenWords)) {
+              initialCandidates.add(Map<String, dynamic>.from(post));
             }
-
-            if (filtered.length >= 30) break;
+            if (initialCandidates.length >= 60) break;
           }
 
-          return await _attachCounts(filtered);
+          if (initialCandidates.isEmpty) return [];
+
+          final authorIds = initialCandidates.map((p) => p['user_id'] as String).toSet().toList();
+          final profilesData = await _supabase.from('profiles').select('id, is_private').inFilter('id', authorIds);
+          final privacyMap = {for (var p in profilesData) p['id']: p['is_private'] ?? false};
+
+          final List<Map<String, dynamic>> finalPosts = [];
+          for (var post in initialCandidates) {
+            final bool isPrivate = privacyMap[post['user_id']] ?? false;
+            if (!isPrivate || followingIds.contains(post['user_id'])) {
+              finalPosts.add(post);
+            }
+            if (finalPosts.length >= 30) break;
+          }
+
+          return await _attachCounts(finalPosts);
         });
   }
 
@@ -113,32 +117,49 @@ class PostService {
         .asyncMap((posts) async => await _attachCounts(posts.map((p) => Map<String, dynamic>.from(p)).toList()));
   }
 
+  // --- LÓGICA DE CARGA MASIVA (SIN N+1) ---
+
   Future<List<Map<String, dynamic>>> _attachCounts(List<Map<String, dynamic>> posts) async {
     if (posts.isEmpty) return [];
     final currentUserId = _supabase.auth.currentUser?.id;
-    final List<Map<String, dynamic>> enrichedPosts = [];
     
-    for (var post in posts) {
-      try {
-        final originalId = post['id'];
-        final p = Map<String, dynamic>.from(post);
-        final likesRes = await _supabase.from('post_likes').select('user_id').eq('post_id', originalId);
-        final commentsRes = await _supabase.from('comments').select('id').eq('post_id', originalId);
-        
-        final profile = await _supabase.from('profiles').select('username, display_name, avatar_url, is_verified, is_private').eq('id', p['user_id']).single();
-        
-        p['likes_count'] = (likesRes as List).length;
-        p['comments_count'] = (commentsRes as List).length;
-        p['profiles'] = _deepClean(profile);
-        
-        if (currentUserId != null) {
-          final myLike = await _supabase.from('post_likes').select().eq('post_id', originalId).eq('user_id', currentUserId).maybeSingle();
-          p['is_liked'] = myLike != null;
-        }
-        enrichedPosts.add(p);
-      } catch (e) { enrichedPosts.add(post); }
+    final postIds = posts.map((p) => p['id']).toList();
+    final userIds = posts.map((p) => p['user_id'] as String).toSet().toList();
+
+    final results = await Future.wait<dynamic>([
+      _supabase.from('profiles').select('id, username, display_name, avatar_url, is_verified, is_private').inFilter('id', userIds),
+      if (currentUserId != null) 
+        _supabase.from('post_likes').select('post_id').eq('user_id', currentUserId).inFilter('post_id', postIds)
+      else 
+        Future.value([]),
+      _supabase.from('post_likes').select('post_id').inFilter('post_id', postIds),
+      _supabase.from('comments').select('post_id').inFilter('post_id', postIds),
+    ]);
+
+    final profilesMap = {for (var p in results[0] as List) p['id']: _deepClean(p)};
+    final myLikes = (results[1] as List).map((l) => l['post_id']).toSet();
+    
+    final likesCountMap = <dynamic, int>{};
+    for (var l in results[2] as List) {
+      final pid = l['post_id'];
+      likesCountMap[pid] = (likesCountMap[pid] ?? 0) + 1;
     }
-    return enrichedPosts;
+
+    final commentsCountMap = <dynamic, int>{};
+    for (var c in results[3] as List) {
+      final pid = c['post_id'];
+      commentsCountMap[pid] = (commentsCountMap[pid] ?? 0) + 1;
+    }
+
+    return posts.map((post) {
+      final pid = post['id'];
+      final p = Map<String, dynamic>.from(post);
+      p['likes_count'] = likesCountMap[pid] ?? 0;
+      p['comments_count'] = commentsCountMap[pid] ?? 0;
+      p['profiles'] = profilesMap[p['user_id']];
+      p['is_liked'] = myLikes.contains(pid);
+      return p;
+    }).toList();
   }
 
   // --- DETALLES Y COMENTARIOS ---
@@ -146,51 +167,75 @@ class PostService {
   Future<Map<String, dynamic>?> getPostDetails(String postId) async {
     try {
       final id = _formatId(postId);
-      final res = await _supabase.from('posts').select('*, profiles(*)').eq('id', id).single();
-      final resMap = _deepClean(res);
-      
-      final likesRes = await _supabase.from('post_likes').select('user_id').eq('post_id', id);
-      final commentsRes = await _supabase.from('comments').select('id').eq('post_id', id);
-      
       final currentUserId = _supabase.auth.currentUser?.id;
-      bool isLiked = false;
-      if (currentUserId != null) {
-        final isLikedRes = await _supabase.from('post_likes').select().eq('post_id', id).eq('user_id', currentUserId).maybeSingle();
-        isLiked = isLikedRes != null;
-      }
 
-      resMap['likes_count'] = (likesRes as List).length;
-      resMap['comments_count'] = (commentsRes as List).length;
-      resMap['is_liked'] = isLiked;
+      final results = await Future.wait<dynamic>([
+        _supabase.from('posts').select('*, profiles(*)').eq('id', id).single(),
+        _supabase.from('post_likes').select('user_id').eq('post_id', id),
+        _supabase.from('comments').select('id').eq('post_id', id),
+        if (currentUserId != null)
+          _supabase.from('post_likes').select().eq('post_id', id).eq('user_id', currentUserId).maybeSingle()
+        else
+          Future.value(null),
+      ]);
+
+      final resMap = _deepClean(results[0]);
+      resMap['likes_count'] = (results[1] as List).length;
+      resMap['comments_count'] = (results[2] as List).length;
+      resMap['is_liked'] = results[3] != null;
+      
       return resMap;
     } catch (e) { return null; }
   }
 
   Future<List<dynamic>> getComments(String postId) async {
     try {
-      final hiddenWords = await _getHiddenWords();
-      final res = await _supabase.from('comments').select('*, profiles(*)').eq('post_id', _formatId(postId)).order('created_at', ascending: true);
-      
-      final List<dynamic> enrichedComments = [];
+      final id = _formatId(postId);
       final currentUserId = _supabase.auth.currentUser?.id;
 
-      for (var comment in res as List) {
+      final results = await Future.wait<dynamic>([
+        _getHiddenWords(),
+        _supabase.from('comments').select('*, profiles(*)').eq('post_id', id).order('created_at', ascending: true),
+      ]);
+      
+      final hiddenWords = results[0] as List<String>;
+      final rawComments = results[1] as List;
+      if (rawComments.isEmpty) return [];
+
+      final commentIds = rawComments.map((c) => c['id']).toList();
+      
+      final batchResults = await Future.wait<dynamic>([
+        _supabase.from('comment_likes').select('comment_id').inFilter('comment_id', commentIds),
+        if (currentUserId != null)
+          _supabase.from('comment_likes').select('comment_id').eq('user_id', currentUserId).inFilter('comment_id', commentIds)
+        else
+          Future.value([]),
+      ]);
+
+      final allLikes = batchResults[0] as List;
+      final myLikes = (batchResults[1] as List).map((l) => l['comment_id']).toSet();
+
+      final likesCountMap = <dynamic, int>{};
+      for (var l in allLikes) {
+        final cid = l['comment_id'];
+        likesCountMap[cid] = (likesCountMap[cid] ?? 0) + 1;
+      }
+
+      final List<dynamic> enriched = [];
+      for (var comment in rawComments) {
         if (_shouldFilter(comment['content'] ?? '', hiddenWords)) continue;
         
-        final originalId = comment['id'];
         final commentMap = _deepClean(comment);
-        final likesRes = await _supabase.from('comment_likes').select('user_id').eq('comment_id', originalId);
-        
-        if (currentUserId != null) {
-          final myLike = await _supabase.from('comment_likes').select().eq('comment_id', originalId).eq('user_id', currentUserId).maybeSingle();
-          commentMap['is_liked'] = myLike != null;
-        }
-        commentMap['likes_count'] = (likesRes as List).length;
-        enrichedComments.add(commentMap);
+        final cid = comment['id'];
+        commentMap['likes_count'] = likesCountMap[cid] ?? 0;
+        commentMap['is_liked'] = myLikes.contains(cid);
+        enriched.add(commentMap);
       }
-      return enrichedComments;
+      return enriched;
     } catch (e) { return []; }
   }
+
+  // --- ACCIONES ---
 
   Future<bool> deletePost(String postId) async {
     try {
@@ -205,22 +250,10 @@ class PostService {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return false;
-      
-      final response = await _supabase
-          .from('comments')
-          .delete()
-          .eq('id', _formatId(commentId))
-          .eq('user_id', userId)
-          .select();
-      
-      return (response as List).isNotEmpty;
-    } catch (e) { 
-      print("Error al eliminar comentario: $e");
-      return false; 
-    }
+      await _supabase.from('comments').delete().eq('id', _formatId(commentId)).eq('user_id', userId);
+      return true;
+    } catch (e) { return false; }
   }
-
-  // --- LÓGICA SOCIAL REFORZADA ---
 
   Future<bool> toggleLike(String postId, bool isCurrentlyLiked) async {
     try {
@@ -228,19 +261,14 @@ class PostService {
       if (userId == null) return false;
       final id = _formatId(postId);
       
-      // Consultamos el estado real para evitar conflictos
       final existing = await _supabase.from('post_likes').select().eq('post_id', id).eq('user_id', userId).maybeSingle();
-
       if (existing != null) {
         await _supabase.from('post_likes').delete().eq('post_id', id).eq('user_id', userId);
       } else {
         await _supabase.from('post_likes').insert({'post_id': id, 'user_id': userId});
       }
       return true;
-    } catch (e) { 
-      if (e.toString().contains('23505') || e.toString().contains('409')) return true;
-      return false; 
-    }
+    } catch (e) { return e.toString().contains('23505'); }
   }
 
   Future<bool> toggleCommentLike(String commentId, bool isCurrentlyLiked) async {
@@ -249,34 +277,14 @@ class PostService {
       if (userId == null) return false;
       final id = _formatId(commentId);
       
-      // Lógica de "Autocuración": Verificamos el estado real en la DB
-      final existing = await _supabase
-          .from('comment_likes')
-          .select()
-          .eq('comment_id', id)
-          .eq('user_id', userId)
-          .maybeSingle();
-
+      final existing = await _supabase.from('comment_likes').select().eq('comment_id', id).eq('user_id', userId).maybeSingle();
       if (existing != null) {
-        // Si el like existe en DB, lo borramos
-        await _supabase
-            .from('comment_likes')
-            .delete()
-            .eq('comment_id', id)
-            .eq('user_id', userId);
+        await _supabase.from('comment_likes').delete().eq('comment_id', id).eq('user_id', userId);
       } else {
-        // Si no existe, lo creamos
-        await _supabase
-            .from('comment_likes')
-            .insert({'comment_id': id, 'user_id': userId});
+        await _supabase.from('comment_likes').insert({'comment_id': id, 'user_id': userId});
       }
       return true;
-    } catch (e) { 
-      // Manejo de carrera: si otro proceso insertó mientras comprobábamos, lo damos por bueno
-      if (e.toString().contains('23505') || e.toString().contains('409')) return true;
-      print("Error real en toggleCommentLike: $e");
-      return false; 
-    }
+    } catch (e) { return e.toString().contains('23505'); }
   }
 
   Future<bool> addComment(String postId, String content, {String? parentId, String? replyToUsername}) async {
@@ -292,18 +300,6 @@ class PostService {
       });
       return true;
     } catch (e) { return false; }
-  }
-
-  // --- OTROS MÉTODOS ---
-
-  Future<List<Map<String, dynamic>>> attachProfiles(List<Map<String, dynamic>> posts) async {
-    if (posts.isEmpty) return [];
-    try {
-      final List<String> userIds = posts.map((p) => p['user_id'] as String).toSet().toList();
-      final profilesData = await _supabase.from('profiles').select('id, username, display_name, avatar_url, is_verified, is_private').inFilter('id', userIds);
-      final Map<String, dynamic> profilesMap = {for (var p in profilesData) p['id']: _deepClean(p)};
-      return posts.map((post) => {...post, 'profiles': profilesMap[post['user_id']]}).toList();
-    } catch (e) { return posts; }
   }
 
   Future<bool> createPost({
@@ -333,9 +329,6 @@ class PostService {
         'capture_date': captureDate,
       });
       return true;
-    } catch (e) { 
-      print("Error creating post: $e");
-      return false; 
-    }
+    } catch (e) { return false; }
   }
 }

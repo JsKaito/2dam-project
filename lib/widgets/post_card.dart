@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:artists_cottage/services/profile_service.dart';
 import 'package:artists_cottage/services/post_service.dart';
 import 'package:artists_cottage/services/shortcode_utils.dart';
@@ -78,7 +78,6 @@ class _PostCardState extends State<PostCard> {
     final int? idNum = int.tryParse(widget.postId ?? '');
     final String code = idNum != null ? ShortcodeUtils.encode(idNum) : (widget.postId ?? '');
     
-    // URL usando localhost como pediste
     final String postUrl = "http://localhost:8080/post/$code";
     final String text = 'Mira este post de ${widget.username} en Artist\'s Alley: $postUrl';
 
@@ -125,9 +124,12 @@ class _PostCardState extends State<PostCard> {
                 },
                 child: CircleAvatar(
                   radius: 18,
-                  backgroundImage: (widget.profileImageUrl != null && widget.profileImageUrl!.isNotEmpty)
-                      ? NetworkImage(widget.profileImageUrl!) 
-                      : const NetworkImage(ProfileService.defaultAvatarUrl),
+                  backgroundColor: Colors.grey[300],
+                  backgroundImage: CachedNetworkImageProvider(
+                    (widget.profileImageUrl != null && widget.profileImageUrl!.isNotEmpty)
+                      ? widget.profileImageUrl! 
+                      : ProfileService.defaultAvatarUrl
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -186,7 +188,17 @@ class _PostCardState extends State<PostCard> {
                 if (widget.imageUrl.isNotEmpty)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.network(widget.imageUrl, width: double.infinity, fit: BoxFit.cover),
+                    child: CachedNetworkImage(
+                      imageUrl: widget.imageUrl,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        height: 200,
+                        color: theme.brightness == Brightness.dark ? Colors.white10 : Colors.black12,
+                        child: const Center(child: Icon(Icons.image_outlined, color: Colors.grey)),
+                      ),
+                      errorWidget: (context, url, error) => const Icon(Icons.error),
+                    ),
                   ),
                 const SizedBox(height: 12),
                 Row(

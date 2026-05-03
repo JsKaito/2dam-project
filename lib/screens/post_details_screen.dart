@@ -43,14 +43,38 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
     if (mounted && postData != null) {
       final following = await _profileService.isFollowing(postData['user_id']);
       
+      // Precarga de imágenes antes de mostrar la pantalla
+      List<Future> imageFutures = [];
+      
+      // Imagen del post
+      if (postData['image_url'] != null) {
+        imageFutures.add(precacheImage(NetworkImage(postData['image_url']), context));
+      }
+      
+      // Avatar del autor
+      final avatarUrl = postData['profiles']?['avatar_url'] ?? ProfileService.defaultAvatarUrl;
+      imageFutures.add(precacheImage(NetworkImage(avatarUrl), context));
+
+      // También precargamos los avatares de los primeros comentarios para evitar saltos
+      for (var comment in commentsData.take(5)) {
+        final cAvatar = comment['profiles']?['avatar_url'] ?? ProfileService.defaultAvatarUrl;
+        imageFutures.add(precacheImage(NetworkImage(cAvatar), context));
+      }
+
+      await Future.wait(imageFutures).timeout(const Duration(seconds: 3), onTimeout: () => []);
+
       commentsData.sort((a, b) => (b['likes_count'] ?? 0).compareTo(a['likes_count'] ?? 0));
 
-      setState(() {
-        _post = postData;
-        _comments = commentsData;
-        _isFollowing = following;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _post = postData;
+          _comments = commentsData;
+          _isFollowing = following;
+          _isLoading = false;
+        });
+      }
+    } else if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -81,7 +105,6 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
     final int? idNum = int.tryParse(widget.postId);
     final String code = idNum != null ? ShortcodeUtils.encode(idNum) : widget.postId;
     
-    // URL usando localhost como pediste
     final String postUrl = "http://localhost:8080/post/$code";
     final String username = _post!['profiles']?['username'] ?? 'artista';
     final String text = 'Mira este post de $username en Artist\'s Alley: $postUrl';
@@ -182,7 +205,7 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Error: No se pudo eliminar el comentario. Verifica si tiene respuestas o tus permisos."),
+            content: Text("Error: No se pudo eliminar el comentario."),
             backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
           )
@@ -418,7 +441,6 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
   }
 
   Widget _buildCommentTile(Map<String, dynamic> comment, {required bool isMain, String? rootId}) {
-    final theme = Theme.of(context);
     final cProfile = comment['profiles'];
     final String commentId = comment['id'].toString();
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;

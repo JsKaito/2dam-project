@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:artists_cottage/widgets/post_card.dart';
 import 'package:artists_cottage/services/post_service.dart';
 import 'package:artists_cottage/services/profile_service.dart';
-import 'package:artists_cottage/services/shortcode_utils.dart';
 
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
@@ -18,11 +17,31 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
   late TabController _tabController;
   
   String _searchQuery = '';
+  Future<void>? _initialPreloadFuture;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this, initialIndex: 0);
+    _initialPreloadFuture = _preloadExploreData();
+  }
+
+  Future<void> _preloadExploreData() async {
+    // Precargamos los posts globales (primera emisión)
+    final posts = await _postService.getGlobalPostsStream().first;
+    
+    if (mounted && posts.isNotEmpty) {
+      List<Future> imageFutures = [];
+      // Precargamos las primeras 6 imágenes de arte para que la rejilla/lista no parpadee
+      for (var post in posts.take(6)) {
+        if (post['image_url'] != null) {
+          imageFutures.add(precacheImage(NetworkImage(post['image_url']), context));
+        }
+        final avatarUrl = post['profiles']?['avatar_url'] ?? ProfileService.defaultAvatarUrl;
+        imageFutures.add(precacheImage(NetworkImage(avatarUrl), context));
+      }
+      await Future.wait(imageFutures).timeout(const Duration(seconds: 3), onTimeout: () => []);
+    }
   }
 
   @override
@@ -61,54 +80,63 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
         centerTitle: false,
         automaticallyImplyLeading: false,
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Container(
-              height: 45,
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E1E1E) : Colors.grey[200],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TextField(
-                controller: _searchController,
-                style: TextStyle(color: theme.textTheme.bodyLarge?.color),
-                decoration: const InputDecoration(
-                  hintText: "Buscar...",
-                  hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
-                  border: InputBorder.none,
-                  prefixIcon: Icon(Icons.search, color: Colors.grey, size: 20),
+      body: FutureBuilder(
+        future: _initialPreloadFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)));
+          }
+
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Container(
+                  height: 45,
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E1E1E) : Colors.grey[200],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    style: TextStyle(color: theme.textTheme.bodyLarge?.color),
+                    decoration: const InputDecoration(
+                      hintText: "Buscar...",
+                      hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
+                      border: InputBorder.none,
+                      prefixIcon: Icon(Icons.search, color: Colors.grey, size: 20),
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value;
+                      });
+                    },
+                  ),
                 ),
-                onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value;
-                  });
-                },
               ),
-            ),
-          ),
-          TabBar(
-            controller: _tabController,
-            indicatorColor: const Color(0xFF6C63FF),
-            labelColor: const Color(0xFF6C63FF),
-            unselectedLabelColor: Colors.grey,
-            labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-            tabs: const [
-              Tab(text: "Cuentas"),
-              Tab(text: "Arte"),
+              TabBar(
+                controller: _tabController,
+                indicatorColor: const Color(0xFF6C63FF),
+                labelColor: const Color(0xFF6C63FF),
+                unselectedLabelColor: Colors.grey,
+                labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+                tabs: const [
+                  Tab(text: "Cuentas"),
+                  Tab(text: "Arte"),
+                ],
+              ),
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildUsersTab(),
+                    _buildPostsTab(),
+                  ],
+                ),
+              ),
             ],
-          ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildUsersTab(),
-                _buildPostsTab(),
-              ],
-            ),
-          ),
-        ],
+          );
+        }
       ),
     );
   }
@@ -117,10 +145,6 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: _postService.getGlobalPostsStream(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)));
-        }
-
         var posts = snapshot.data ?? [];
         
         if (_searchQuery.isNotEmpty) {
@@ -134,7 +158,7 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
           }).toList();
         }
 
-        if (posts.isEmpty) {
+        if (posts.isEmpty && snapshot.connectionState != ConnectionState.waiting) {
           return const Center(child: Text("Sin resultados en publicaciones.", style: TextStyle(color: Colors.grey)));
         }
 
@@ -174,12 +198,8 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
     return FutureBuilder<List<dynamic>>(
       future: _profileService.searchUsers(_searchQuery),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)));
-        }
-
         final users = snapshot.data ?? [];
-        if (users.isEmpty) {
+        if (users.isEmpty && snapshot.connectionState != ConnectionState.waiting) {
           return const Center(child: Text("No se encontraron artistas.", style: TextStyle(color: Colors.grey)));
         }
 

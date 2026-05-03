@@ -27,15 +27,16 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() => _isLoading = false);
         
         if (response == true) {
-          // Login normal exitoso
           Navigator.pushReplacementNamed(context, '/home');
         } else if (response == "mfa_required") {
-          // Login parcial: Requiere el segundo factor (2FA)
           Navigator.pushReplacementNamed(context, '/mfa-login');
         } else {
-          // Otros fallos
+          // Mostramos el error real que viene del AuthService
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Email o contraseña incorrectos.")),
+            SnackBar(
+              content: Text(response is String ? response : "Error desconocido"),
+              backgroundColor: Colors.redAccent,
+            ),
           );
         }
       }
@@ -43,7 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Error al iniciar sesión. Inténtalo de nuevo.")),
+          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.redAccent),
         );
       }
     }

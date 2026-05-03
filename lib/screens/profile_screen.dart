@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:artists_cottage/services/profile_service.dart';
 import 'package:artists_cottage/services/post_service.dart';
 import 'package:artists_cottage/services/shortcode_utils.dart';
@@ -41,7 +41,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: StreamBuilder<Map<String, dynamic>>(
         stream: _profileService.profileStream,
         builder: (context, profileSnapshot) {
-          if (profileSnapshot.connectionState == ConnectionState.waiting) {
+          if (profileSnapshot.connectionState == ConnectionState.waiting && !profileSnapshot.hasData) {
             return const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)));
           }
 
@@ -67,7 +67,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         width: double.infinity, 
                         color: theme.brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[300],
                         child: bannerUrl != null 
-                          ? Image.network(bannerUrl, key: ValueKey(bannerUrl), fit: BoxFit.cover)
+                          ? CachedNetworkImage(
+                              imageUrl: bannerUrl,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(color: theme.brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[300]),
+                            )
                           : Container(color: const Color(0xFF6C63FF)),
                       ),
                       Positioned(
@@ -86,8 +90,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: CircleAvatar(
                             radius: 50,
                             backgroundColor: Colors.white,
-                            backgroundImage: NetworkImage(userData['avatar_url'] ?? ProfileService.defaultAvatarUrl),
-                            key: ValueKey(userData['avatar_url']),
+                            backgroundImage: CachedNetworkImageProvider(userData['avatar_url'] ?? ProfileService.defaultAvatarUrl),
                           ),
                         ),
                       ),
@@ -104,11 +107,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             if (isVerified) const SizedBox(width: 26), 
                             Text(
                               userData['display_name'] ?? userData['username'] ?? "Artista", 
-                              style: TextStyle(
-                                fontSize: 22, 
-                                fontWeight: FontWeight.bold, 
-                                color: theme.textTheme.titleLarge?.color
-                              )
+                              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)
                             ),
                             if (isVerified) ...[
                               const SizedBox(width: 6),
@@ -121,7 +120,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Text(
                           userData['bio'] ?? "Sin biografía todavía. ✨", 
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: theme.textTheme.bodyMedium?.color),
                         ),
                       ],
                     ),
@@ -183,30 +181,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     stream: _postService.getUserPostsStream(userId),
                     builder: (context, snapshot) {
                       final posts = snapshot.data ?? [];
-                      return Container(
-                        color: theme.scaffoldBackgroundColor,
-                        child: GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          padding: EdgeInsets.zero,
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            crossAxisSpacing: 1, 
-                            mainAxisSpacing: 1,
-                          ),
-                          itemCount: posts.length,
-                          itemBuilder: (context, index) {
-                            final post = posts[index];
-                            return GestureDetector(
-                              onTap: () {
-                                final int? idNum = int.tryParse(post['id'].toString());
-                                final String code = idNum != null ? ShortcodeUtils.encode(idNum) : post['id'].toString();
-                                Navigator.pushNamed(context, '/post/$code');
-                              },
-                              child: Image.network(post['image_url'], fit: BoxFit.cover),
-                            );
-                          },
+                      return GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: EdgeInsets.zero,
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 1, 
+                          mainAxisSpacing: 1,
                         ),
+                        itemCount: posts.length,
+                        itemBuilder: (context, index) {
+                          final post = posts[index];
+                          return GestureDetector(
+                            onTap: () {
+                              final int? idNum = int.tryParse(post['id'].toString());
+                              final String code = idNum != null ? ShortcodeUtils.encode(idNum) : post['id'].toString();
+                              Navigator.pushNamed(context, '/post/$code');
+                            },
+                            child: CachedNetworkImage(
+                              imageUrl: post['image_url'],
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(color: theme.brightness == Brightness.dark ? Colors.white10 : Colors.black12),
+                            ),
+                          );
+                        },
                       );
                     }
                   ),
@@ -227,10 +226,9 @@ class _StatItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Column(
       children: [
-        Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.textTheme.titleLarge?.color)),
+        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
       ],
     );
