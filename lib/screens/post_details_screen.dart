@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:artists_cottage/services/post_service.dart';
@@ -21,6 +22,7 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
   final PostService _postService = PostService();
   final ProfileService _profileService = ProfileService();
   final TextEditingController _commentController = TextEditingController();
+  StreamSubscription? _updateSubscription;
   
   Map<String, dynamic>? _post;
   List<dynamic> _comments = [];
@@ -34,6 +36,33 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
   void initState() {
     super.initState();
     _loadData();
+    _initSubscription();
+  }
+
+  void _initSubscription() {
+    _updateSubscription = _postService.postUpdateStream.listen((updatedPostId) {
+      if (updatedPostId == widget.postId && mounted) {
+        _refreshPostData();
+      }
+    });
+  }
+
+  Future<void> _refreshPostData() async {
+    final postData = await _postService.getPostDetails(widget.postId);
+    if (mounted && postData != null) {
+      setState(() {
+        _post!['is_liked'] = postData['is_liked'];
+        _post!['likes_count'] = postData['likes_count'];
+        _post!['comments_count'] = postData['comments_count'];
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _updateSubscription?.cancel();
+    _commentController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -46,16 +75,13 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
       // Precarga de imágenes antes de mostrar la pantalla
       List<Future> imageFutures = [];
       
-      // Imagen del post
       if (postData['image_url'] != null) {
         imageFutures.add(precacheImage(NetworkImage(postData['image_url']), context));
       }
       
-      // Avatar del autor
       final avatarUrl = postData['profiles']?['avatar_url'] ?? ProfileService.defaultAvatarUrl;
       imageFutures.add(precacheImage(NetworkImage(avatarUrl), context));
 
-      // También precargamos los avatares de los primeros comentarios para evitar saltos
       for (var comment in commentsData.take(5)) {
         final cAvatar = comment['profiles']?['avatar_url'] ?? ProfileService.defaultAvatarUrl;
         imageFutures.add(precacheImage(NetworkImage(cAvatar), context));
@@ -91,8 +117,15 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
 
   Future<void> _handleLike() async {
     if (_post == null) return;
-    final success = await _postService.toggleLike(widget.postId, _post!['is_liked']);
-    if (success) {
+    
+    // UI Optimista
+    setState(() {
+      _post!['is_liked'] = !_post!['is_liked'];
+      _post!['likes_count'] += _post!['is_liked'] ? 1 : -1;
+    });
+
+    final success = await _postService.toggleLike(widget.postId, !_post!['is_liked']);
+    if (!success && mounted) {
       setState(() {
         _post!['is_liked'] = !_post!['is_liked'];
         _post!['likes_count'] += _post!['is_liked'] ? 1 : -1;
@@ -222,7 +255,10 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
     _commentController.clear();
     setState(() { _replyingToId = null; _replyingToName = null; _rootParentId = null; });
     final success = await _postService.addComment(widget.postId, content, parentId: parentId, replyToUsername: replyTo);
-    if (success) _loadData(); 
+    if (success) {
+      _loadData();
+      _postService.notifyPostUpdate(widget.postId);
+    }
   }
 
   String _formatCaptureDate(String? isoDate) {

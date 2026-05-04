@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:artists_cottage/services/profile_service.dart';
@@ -48,6 +49,7 @@ class PostCard extends StatefulWidget {
 
 class _PostCardState extends State<PostCard> {
   final PostService _postService = PostService();
+  StreamSubscription? _updateSubscription;
   
   late bool _liked;
   late int _likesCount;
@@ -57,14 +59,56 @@ class _PostCardState extends State<PostCard> {
     super.initState();
     _liked = widget.isLiked;
     _likesCount = widget.likes;
+    _initSubscription();
+  }
+
+  void _initSubscription() {
+    _updateSubscription = _postService.postUpdateStream.listen((updatedPostId) {
+      if (updatedPostId == widget.postId && mounted) {
+        _refreshPostData();
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(PostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isLiked != widget.isLiked || oldWidget.likes != widget.likes) {
+      _liked = widget.isLiked;
+      _likesCount = widget.likes;
+    }
+    if (oldWidget.postId != widget.postId) {
+      _updateSubscription?.cancel();
+      _initSubscription();
+    }
+  }
+
+  Future<void> _refreshPostData() async {
+    if (widget.postId == null) return;
+    final details = await _postService.getPostDetails(widget.postId!);
+    if (details != null && mounted) {
+      setState(() {
+        _liked = details['is_liked'] ?? false;
+        _likesCount = details['likes_count'] ?? 0;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _updateSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _handleLike() async {
     if (widget.postId == null) return;
+    
+    // Optimistic UI update
     setState(() {
       _liked = !_liked;
       _likesCount += _liked ? 1 : -1;
     });
+
     final success = await _postService.toggleLike(widget.postId!, !_liked);
     if (!success && mounted) {
       setState(() {

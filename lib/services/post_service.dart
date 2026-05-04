@@ -1,9 +1,42 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 class PostService {
+  // Patrón Singleton para manejar suscripciones en tiempo real centralizadas
+  static final PostService _instance = PostService._internal();
+  factory PostService() => _instance;
+
+  PostService._internal() {
+    _initRealtime();
+  }
+
   final _supabase = Supabase.instance.client;
+
+  // Transmisión de eventos de actualización de posts (para sincronización entre pantallas)
+  final _postUpdateController = StreamController<String>.broadcast();
+  Stream<String> get postUpdateStream => _postUpdateController.stream;
+
+  void _initRealtime() {
+    // Escuchar cambios en la tabla 'post_likes' para actualizaciones en tiempo real de otros usuarios
+    _supabase.channel('public:post_likes').onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'post_likes',
+      callback: (payload) {
+        final record = (payload.newRecord.isEmpty) ? payload.oldRecord : payload.newRecord;
+        final postId = record['post_id']?.toString();
+        if (postId != null) {
+          _postUpdateController.add(postId);
+        }
+      },
+    ).subscribe();
+  }
+
+  void notifyPostUpdate(String postId) {
+    _postUpdateController.add(postId);
+  }
 
   dynamic _deepClean(dynamic data) {
     if (data == null) return null;
@@ -267,8 +300,18 @@ class PostService {
       } else {
         await _supabase.from('post_likes').insert({'post_id': id, 'user_id': userId});
       }
+      
+      // Notificar localmente para sincronización instantánea entre widgets
+      _postUpdateController.add(postId);
+      
       return true;
-    } catch (e) { return e.toString().contains('23505'); }
+    } catch (e) { 
+      if (e.toString().contains('23505')) {
+        _postUpdateController.add(postId);
+        return true;
+      }
+      return false;
+    }
   }
 
   Future<bool> toggleCommentLike(String commentId, bool isCurrentlyLiked) async {
