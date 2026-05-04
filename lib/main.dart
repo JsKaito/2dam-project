@@ -1,9 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 
-// Importación condicional para evitar errores en Android/iOS
+// Importación condicional
 import 'package:flutter_web_plugins/url_strategy.dart' if (dart.library.io) 'package:artists_cottage/services/web_stub.dart';
 
 import 'package:artists_cottage/screens/login_screen.dart';
@@ -16,6 +17,7 @@ import 'package:artists_cottage/navigation_wrapper.dart';
 import 'package:artists_cottage/services/shortcode_utils.dart';
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,7 +26,6 @@ void main() async {
     usePathUrlStrategy();
   }
 
-  // Inicialización directa con la clave correcta de Supabase
   await Supabase.initialize(
     url: 'https://yrbzkgfomjqilmyxzfqe.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlyYnprZ2ZvbWpxaWxteXh6ZnFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMDc4NjAsImV4cCI6MjA5MTY4Mzg2MH0.TAQZz_6shAIiY9FIVYCVk4-2hGtR4pehgIGAA_igxcg',
@@ -47,6 +48,7 @@ class MyApp extends StatelessWidget {
       builder: (_, ThemeMode currentMode, __) {
         return MaterialApp(
           title: "Artist's Cottage",
+          navigatorKey: navigatorKey,
           debugShowCheckedModeBanner: false,
           themeMode: currentMode,
           theme: _buildTheme(Brightness.light),
@@ -127,15 +129,39 @@ class AuthGuardian extends StatefulWidget {
 }
 
 class _AuthGuardianState extends State<AuthGuardian> {
+  StreamSubscription? _authSubscription;
+  bool _isRecovering = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((state) {
+      if (state.event == AuthChangeEvent.passwordRecovery) {
+        setState(() => _isRecovering = true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<AuthState>(
-      stream: Supabase.instance.client.auth.onAuthStateChange,
-      builder: (context, snapshot) {
-        final session = snapshot.data?.session ?? Supabase.instance.client.auth.currentSession;
-        if (session != null) return const NavigationWrapper(initialIndex: 0);
-        return const LoginScreen();
-      },
-    );
+    if (_isRecovering) return const ResetPasswordScreen();
+
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session != null) {
+      // Si hay sesión pero falta el segundo factor (MFA), lo mandamos a la pantalla de código
+      final needsMfa = session.user.appMetadata['aal'] == 'aal1' && 
+                       session.user.appMetadata['mfa_enabled'] == true;
+      
+      if (needsMfa) return const MFALoginScreen();
+
+      return const NavigationWrapper(initialIndex: 0);
+    }
+    return const LoginScreen();
   }
 }

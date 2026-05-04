@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -144,30 +145,46 @@ class ProfileService {
     } catch (e) { return false; }
   }
 
-  Future<String?> uploadBanner(dynamic imageFile) async {
+  Future<String?> uploadBanner(Uint8List bytes) async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return null;
       final path = 'banners/${user.id}/banner_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      if (kIsWeb) await _supabase.storage.from('posts').uploadBinary(path, imageFile);
-      else await _supabase.storage.from('posts').upload(path, imageFile as File);
+      
+      await _supabase.storage.from('posts').uploadBinary(
+        path, 
+        bytes,
+        fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
+      );
+      
       final url = _supabase.storage.from('posts').getPublicUrl(path);
       await _supabase.from('profiles').update({'banner_url': url}).eq('id', user.id);
       return url;
-    } catch (e) { return null; }
+    } catch (e) { 
+      print("Error subiendo banner: $e");
+      return null; 
+    }
   }
 
-  Future<String?> uploadAvatar(dynamic imageFile) async {
+  Future<String?> uploadAvatar(Uint8List bytes) async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return null;
       final path = 'avatars/${user.id}/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      if (kIsWeb) await _supabase.storage.from('posts').uploadBinary(path, imageFile);
-      else await _supabase.storage.from('posts').upload(path, imageFile as File);
+      
+      await _supabase.storage.from('posts').uploadBinary(
+        path, 
+        bytes,
+        fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
+      );
+      
       final url = _supabase.storage.from('posts').getPublicUrl(path);
       await _supabase.from('profiles').update({'avatar_url': url}).eq('id', user.id);
       return url;
-    } catch (e) { return null; }
+    } catch (e) { 
+      print("Error subiendo avatar: $e");
+      return null; 
+    }
   }
 
   Future<bool> updateProfile({required String username, required String displayName, String? bio, String? avatarUrl, String? bannerUrl}) async {
@@ -220,7 +237,12 @@ class ProfileService {
     try {
       final user = _supabase.auth.currentUser;
       if (user?.email == null) return false;
-      await _supabase.auth.resetPasswordForEmail(user!.email!);
+      
+      // Añadimos redirectTo para que el enlace abra la app directamente
+      await _supabase.auth.resetPasswordForEmail(
+        user!.email!,
+        redirectTo: 'io.supabase.artistscottage://login-callback/',
+      );
       return true;
     } catch (e) { return false; }
   }

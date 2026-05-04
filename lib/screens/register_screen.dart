@@ -40,7 +40,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _passwordController.addListener(_validatePassword);
     _confirmPasswordController.addListener(_validatePassword);
     _usernameController.addListener(_onUsernameChanged);
-    // Añadimos listener al email para refrescar el estado del botón "Continuar" mientras se escribe
     _emailController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -60,7 +59,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _onUsernameChanged() {
     if (_debounce?.isActive ?? false) _debounce?.cancel();
     
-    // Si el campo está vacío, reseteamos estados
     if (_usernameController.text.trim().isEmpty) {
       setState(() {
         _isUsernameAvailable = true;
@@ -110,17 +108,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _register() async {
     setState(() => _isLoading = true);
-    final success = await AuthService().register(
+    final result = await AuthService().register(
       _emailController.text.trim(),
       _passwordController.text,
       _usernameController.text.trim().toLowerCase(),
     );
+    
     if (mounted) {
       setState(() => _isLoading = false);
-      if (success) {
+      
+      if (result == true) {
         _showSuccessDialog();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al registrar. Verifica los datos.")));
+        String errorMessage = "Error al registrar. Verifica los datos.";
+        if (result is String) {
+          errorMessage = result;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.redAccent,
+          )
+        );
       }
     }
   }
@@ -131,15 +140,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text("¡Casi listo!", style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold)),
-        content: const Text("Hemos enviado un correo de confirmación. Por favor, verifica tu cuenta para poder entrar."),
+        title: const Text("¡Registro completado!", style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold)),
+        content: const Text("Tu cuenta ha sido creada con éxito. Ya puedes iniciar sesión con tus credenciales."),
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
+              Navigator.pop(context); // Cerrar diálogo
+              Navigator.pop(context); // Volver al Login
             },
-            child: const Text("ENTENDIDO", style: TextStyle(color: Colors.white)),
+            child: const Text("ENTRAR AHORA", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

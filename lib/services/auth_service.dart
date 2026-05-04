@@ -7,17 +7,22 @@ class AuthService {
 
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  Future<bool> register(String email, String password, String username) async {
+  Future<dynamic> register(String email, String password, String username) async {
     try {
       final response = await _supabase.auth.signUp(
         email: email,
         password: password,
         data: {'username': username},
+        emailRedirectTo: 'io.supabase.artistscottage://login-callback/',
       );
       return response.user != null;
+    } on AuthException catch (e) {
+      if (e.message.contains("rate limit exceeded")) {
+        return "Demasiados intentos. Por favor, espera un momento.";
+      }
+      return e.message;
     } catch (e) {
-      print("Error en registro: $e");
-      return false;
+      return "Error inesperado al registrar.";
     }
   }
 
@@ -41,10 +46,10 @@ class AuthService {
       }
       return false;
     } on AuthException catch (e) {
-      if (e.message.contains("mfa")) return "mfa_required";
-      return e.message; // Devolvemos el mensaje de error real de Supabase
+      if (e.message.toLowerCase().contains("mfa")) return "mfa_required";
+      return e.message;
     } catch (e) {
-      return "Error de conexión: $e"; // Error de red o similar
+      return "Error de conexión: $e";
     }
   }
 
@@ -57,7 +62,7 @@ class AuthService {
       
       final factorId = verifiedFactors.first.id;
       final challenge = await _supabase.auth.mfa.challenge(factorId: factorId);
-      
+
       await _supabase.auth.mfa.verify(
         factorId: factorId,
         challengeId: challenge.id,
@@ -65,7 +70,6 @@ class AuthService {
       );
       return true;
     } catch (e) {
-      print("Error verify OTP: $e");
       return false;
     }
   }
