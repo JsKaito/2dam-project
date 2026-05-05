@@ -256,15 +256,23 @@ class ProfileService {
     return List<Map<String, dynamic>>.from(res);
   }
 
-  Future<void> acceptFollowRequest(String requestId, String senderId) async {
-    final currentUserId = _supabase.auth.currentUser?.id;
-    if (currentUserId == null) return;
+  Future<bool> acceptFollowRequest(String requestId, String senderId) async {
+    try {
+      final currentUserId = _supabase.auth.currentUser?.id;
+      if (currentUserId == null) return false;
 
-    await _supabase.from('followers').insert({
-      'follower_id': senderId,
-      'following_id': currentUserId
-    });
-    await _supabase.from('follow_requests').delete().eq('id', requestId);
+      // Insertar en seguidores
+      await _supabase.from('followers').insert({
+        'follower_id': senderId,
+        'following_id': currentUserId
+      });
+      // Borrar solicitud
+      await _supabase.from('follow_requests').delete().eq('id', requestId);
+      return true;
+    } catch (e) {
+      print("Error accepting follow request: $e");
+      return false;
+    }
   }
 
   Future<void> rejectFollowRequest(String requestId) async {

@@ -17,6 +17,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final ProfileService _profileService = ProfileService();
+  final AuthService _authService = AuthService();
   
   bool _pushLikes = true;
   bool _pushComments = true;
@@ -28,11 +29,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<String> _hiddenWordsTags = [];
   bool _isLoading = true;
   String? _verificationStatus;
+  List<Map<String, dynamic>> _savedAccounts = [];
 
   @override
   void initState() {
     super.initState();
     _loadAllSettings();
+    _loadSavedAccounts();
   }
 
   Future<void> _loadAllSettings() async {
@@ -67,6 +70,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _loadSavedAccounts() async {
+    final accounts = await _authService.getSavedAccounts();
+    if (mounted) setState(() => _savedAccounts = accounts);
+  }
+
   Future<void> _update(String key, dynamic value) async {
     setState(() {
       if (key == 'push_likes') _pushLikes = value;
@@ -78,6 +86,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (key == 'tag_approval_required') _tagApprovalRequired = value;
     });
     await _profileService.updateSetting(key, value);
+  }
+
+  // --- LÓGICA MULTI-CUENTA ---
+
+  void _showAccountsPanel() {
+    _showPanel(
+      title: "Cambiar Cuenta",
+      builder: (context, setPanelState) {
+        final currentUserId = _authService.currentUser?.id;
+        return Column(
+          children: [
+            ..._savedAccounts.map((acc) => ListTile(
+              leading: CircleAvatar(
+                backgroundImage: NetworkImage(acc['avatar_url'] ?? ProfileService.defaultAvatarUrl),
+              ),
+              title: Text(acc['display_name'] ?? acc['username'] ?? "Usuario"),
+              subtitle: Text("@${acc['username']}"),
+              trailing: SizedBox(
+                width: 40,
+                height: 40,
+                child: acc['id'] == currentUserId 
+                  ? const Center(child: Icon(Icons.check_circle, color: Color(0xFF6C63FF), size: 24))
+                  : Center(
+                      child: GestureDetector(
+                        onTap: () async {
+                          await _authService.removeAccount(acc['id']);
+                          final updated = await _authService.getSavedAccounts();
+                          setPanelState(() => _savedAccounts = updated);
+                          setState(() => _savedAccounts = updated);
+                        },
+                        child: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 24),
+                      ),
+                    ),
+              ),
+              onTap: acc['id'] == currentUserId ? null : () async {
+                Navigator.pop(context); // Cierra el modal
+                setState(() => _isLoading = true);
+                final ok = await _authService.switchAccount(acc);
+                if (ok) {
+                  // Navegación limpia al PERFIL usando el navigatorKey global
+                  navigatorKey.currentState?.pushNamedAndRemoveUntil('/profile', (route) => false);
+                } else {
+                  if (mounted) {
+                    setState(() => _isLoading = false);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al cambiar cuenta")));
+                  }
+                }
+              },
+            )).toList(),
+            const Divider(height: 32),
+            _buildTile(Icons.add_circle_outline, "Añadir otra cuenta", () {
+              Navigator.pushNamed(context, '/login');
+            }),
+          ],
+        );
+      },
+    );
   }
 
   // --- LÓGICA DE PRIVACIDAD MEJORADA ---
@@ -470,6 +535,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ]),
           _buildGroup("Cuenta y Seguridad", [
             _buildTile(Icons.person_outline, "Perfil", () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EditProfileScreen()))),
+            _buildTile(Icons.account_circle_outlined, "Cambiar Cuenta", _showAccountsPanel),
             _buildTile(Icons.security, "Seguridad", _showSecurityPanel),
             ListTile(
               leading: const Icon(Icons.verified_outlined, size: 22),

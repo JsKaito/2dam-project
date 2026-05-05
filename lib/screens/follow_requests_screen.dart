@@ -20,6 +20,7 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen> {
   }
 
   Future<void> _loadRequests() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     final requests = await _profileService.getFollowRequests();
     if (mounted) {
@@ -31,13 +32,29 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen> {
   }
 
   Future<void> _accept(String requestId, String senderId) async {
-    await _profileService.acceptFollowRequest(requestId, senderId);
-    _loadRequests();
+    final success = await _profileService.acceptFollowRequest(requestId, senderId);
+    if (mounted) {
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Solicitud aceptada")),
+        );
+        _loadRequests();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Error al aceptar la solicitud. Verifica los permisos.")),
+        );
+      }
+    }
   }
 
   Future<void> _reject(String requestId) async {
     await _profileService.rejectFollowRequest(requestId);
-    _loadRequests();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Solicitud eliminada")),
+      );
+      _loadRequests();
+    }
   }
 
   @override
@@ -60,7 +77,7 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen> {
                       leading: CircleAvatar(
                         backgroundImage: NetworkImage(sender['avatar_url'] ?? ProfileService.defaultAvatarUrl),
                       ),
-                      title: Text(sender['display_name'] ?? sender['username']),
+                      title: Text(sender['display_name'] ?? sender['username'] ?? "Usuario"),
                       subtitle: Text("@${sender['username']}"),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
