@@ -171,7 +171,29 @@ class _AuthGuardianState extends State<AuthGuardian> {
   }
 
   Future<void> _handleIncomingLink(Uri uri) async {
-    if (uri.scheme != 'io.supabase.artistscottage') return;
+    final String uriString = uri.toString();
+    
+    // Soporta tanto el esquema personalizado como el host HTTPS oficial
+    final bool isCustomScheme = uri.scheme == 'io.supabase.artistscottage';
+    final bool isHttpsScheme = uri.scheme == 'https' && (uri.host == 'artistscottage.com' || uri.host == 'yrbzkgfomjqilmyxzfqe.supabase.co');
+
+    if (!isCustomScheme && !isHttpsScheme) return;
+
+    // Manejo robusto de navegación a posts (extrae el ID sin importar el host o path exacto)
+    if (uriString.contains('/post/')) {
+      try {
+        final parts = uriString.split('/post/');
+        if (parts.length > 1) {
+          final String code = parts[1].split('?').first.split('#').first;
+          if (code.isNotEmpty) {
+            navigatorKey.currentState?.pushNamed('/post/$code');
+            return;
+          }
+        }
+      } catch (e) {
+        debugPrint('Error parseando post link: $e');
+      }
+    }
 
     final params = _extractAuthParams(uri);
     final isRecovery = params['type'] == 'recovery';

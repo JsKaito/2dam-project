@@ -138,9 +138,11 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
     final int? idNum = int.tryParse(widget.postId);
     final String code = idNum != null ? ShortcodeUtils.encode(idNum) : widget.postId;
     
-    final String postUrl = "http://localhost:8080/post/$code";
+    // URL de la Edge Function para redirección 302 directa
+    final String shareUrl = "https://yrbzkgfomjqilmyxzfqe.supabase.co/functions/v1/share-post?id=$code";
+    
     final String username = _post!['profiles']?['username'] ?? 'artista';
-    final String text = 'Mira este post de $username en Artist\'s Alley: $postUrl';
+    final String text = 'Mira este post de $username en Artist\'s Cottage: $shareUrl';
 
     try {
       await Share.share(text, subject: 'Post compartido: ${_post!['title'] ?? 'Sin título'}');

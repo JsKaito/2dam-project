@@ -27,12 +27,22 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- Deep linking config -->
-            <intent-filter android:autoVerify="true">
+            <!-- Deep linking config para el esquema personalizado -->
+            <!-- Importante: host="app" para que coincida con la URL de la Edge Function -->
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="io.supabase.artistscottage" android:host="app" />
                 <data android:scheme="io.supabase.artistscottage" android:host="login-callback" />
+            </intent-filter>
+
+            <!-- Deep linking config para HTTPS (Opcional, para enlaces artistscottage.com) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="artistscottage.com" />
             </intent-filter>
         </activity>
         <meta-data

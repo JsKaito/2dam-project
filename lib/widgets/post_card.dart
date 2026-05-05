@@ -122,8 +122,9 @@ class _PostCardState extends State<PostCard> {
     final int? idNum = int.tryParse(widget.postId ?? '');
     final String code = idNum != null ? ShortcodeUtils.encode(idNum) : (widget.postId ?? '');
     
-    final String postUrl = "http://localhost:8080/post/$code";
-    final String text = 'Mira este post de ${widget.username} en Artist\'s Alley: $postUrl';
+    // URL de la Edge Function (idéntica a la de detalles)
+    final String shareUrl = "https://yrbzkgfomjqilmyxzfqe.supabase.co/functions/v1/share-post?id=$code";
+    final String text = 'Mira este post de ${widget.username} en Artist\'s Cottage: $shareUrl';
 
     try {
       await Share.share(text, subject: 'Post compartido: ${widget.title ?? 'Sin título'}');
