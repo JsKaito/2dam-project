@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -16,7 +17,7 @@ class AuthService {
         email: email,
         password: password,
         data: {'username': username},
-        emailRedirectTo: 'io.supabase.artistscottage://login-callback/',
+        emailRedirectTo: 'io.supabase.artistscottage://login-callback',
       );
       return response.user != null;
     } on AuthException catch (e) {
@@ -57,7 +58,22 @@ class AuthService {
     }
   }
 
-  // --- MULTI-CUENTA LOGIC OPTIMIZADA ---
+  /// Envía un correo de recuperación de contraseña.
+  Future<dynamic> sendPasswordResetEmail(String email) async {
+    try {
+      await _supabase.auth.resetPasswordForEmail(
+        email,
+        redirectTo: kIsWeb ? null : 'io.supabase.artistscottage://login-callback',
+      );
+      return true;
+    } on AuthException catch (e) {
+      return e.message;
+    } catch (e) {
+      return "Error inesperado.";
+    }
+  }
+
+  // --- MULTI-CUENTA LOGIC ---
 
   Future<void> saveCurrentAccount() async {
     try {
@@ -69,7 +85,6 @@ class AuthService {
       final String? accountsJson = prefs.getString(_accountsKey);
       List<dynamic> accounts = accountsJson != null ? jsonDecode(accountsJson) : [];
 
-      // Intentar obtener datos básicos del perfil (sin bloquear si falla)
       Map<String, dynamic>? profile;
       try {
         profile = await _supabase.from('profiles').select('username, avatar_url, display_name').eq('id', user.id).maybeSingle();
@@ -110,10 +125,8 @@ class AuthService {
       final String? refreshToken = account['refresh_token'];
       if (refreshToken == null) return false;
 
-      // Cambiar sesión
       final res = await _supabase.auth.setSession(refreshToken);
       if (res.session != null) {
-        // Actualizar datos de cuenta en segundo plano, sin esperar
         saveCurrentAccount();
         return true;
       }
@@ -133,8 +146,6 @@ class AuthService {
     accounts.removeWhere((acc) => acc['id'] == userId);
     await prefs.setString(_accountsKey, jsonEncode(accounts));
   }
-
-  // --- FIN MULTI-CUENTA ---
 
   Future<bool> verifyOTP(String code) async {
     try {

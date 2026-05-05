@@ -14,14 +14,51 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   bool _isLoading = false;
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
+  bool _hasMinLength = false;
+  bool _hasUppercase = false;
+  bool _hasNumber = false;
+  bool _hasSymbol = false;
+  bool _passwordsMatch = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _passwordController.addListener(_validatePassword);
+    _confirmPasswordController.addListener(_validatePassword);
+  }
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  void _validatePassword() {
+    final pass = _passwordController.text;
+    final confirm = _confirmPasswordController.text;
+    setState(() {
+      _hasMinLength = pass.length >= 6;
+      _hasUppercase = pass.contains(RegExp(r'[A-Z]'));
+      _hasNumber = pass.contains(RegExp(r'[0-9]'));
+      _hasSymbol = pass.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
+      _passwordsMatch = pass.isNotEmpty && pass == confirm;
+    });
+  }
   Future<void> _updatePassword() async {
     final pass = _passwordController.text.trim();
     final confirm = _confirmPasswordController.text.trim();
 
-    if (pass.length < 6) {
+    final meetsRules = pass.length >= 6 &&
+        pass.contains(RegExp(r'[A-Z]')) &&
+        pass.contains(RegExp(r'[0-9]')) &&
+        pass.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
+
+    if (!meetsRules) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("La contraseña debe tener al menos 6 caracteres")),
+        const SnackBar(
+          content: Text("La contraseña debe tener 6+ caracteres, una mayúscula, un número y un símbolo"),
+        ),
       );
       return;
     }
@@ -119,6 +156,13 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
               ),
             ),
+            const SizedBox(height: 16), // Pequeño espacio añadido
+
+            _buildRequirement("Mínimo 6 caracteres", _hasMinLength),
+            _buildRequirement("Al menos una mayúscula", _hasUppercase),
+            _buildRequirement("Al menos un número", _hasNumber),
+            _buildRequirement("Al menos un símbolo", _hasSymbol),
+            _buildRequirement("Las contraseñas coinciden", _passwordsMatch),
             const SizedBox(height: 32),
 
             // Botón de Acción
@@ -126,7 +170,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               width: double.infinity,
               height: 55,
               child: ElevatedButton(
-                onPressed: _isLoading ? null : _updatePassword,
+                onPressed: (_isLoading || !_passwordsMatch || !_hasMinLength || !_hasUppercase || !_hasNumber || !_hasSymbol)
+                    ? null
+                    : _updatePassword,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6C63FF),
                   foregroundColor: Colors.white,
@@ -140,6 +186,19 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildRequirement(String text, bool met) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(met ? Icons.check_circle : Icons.circle_outlined, size: 16, color: met ? Colors.green : Colors.grey),
+          const SizedBox(width: 8),
+          Text(text, style: TextStyle(color: met ? Colors.white : Colors.grey, fontSize: 13)),
+        ],
       ),
     );
   }
