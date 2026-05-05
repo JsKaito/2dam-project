@@ -21,6 +21,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   final PostService _postService = PostService();
   
   bool _isFollowing = false;
+  String? _requestStatus;
   bool _isMe = false;
   Map<String, dynamic>? _profile;
   int _followersCount = 0;
@@ -59,6 +60,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final results = await Future.wait([
       _profileService.isFollowing(targetId),
       _profileService.getFollowCounts(targetId),
+      _profileService.getFollowRequestStatus(targetId),
     ]);
 
     if (mounted) {
@@ -68,6 +70,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         final counts = results[1] as Map<String, int>;
         _followersCount = counts['followers'] ?? 0;
         _followingCount = counts['following'] ?? 0;
+        _requestStatus = results[2] as String?;
       });
     }
   }
@@ -99,25 +102,34 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Future<void> _toggleFollow() async {
     if (_profile == null) return;
     final String targetId = _profile!['id'];
+    final bool isPrivate = _profile!['is_private'] ?? false;
 
-    setState(() {
-      _isFollowing = !_isFollowing;
-      _followersCount += _isFollowing ? 1 : -1;
-    });
-
-    try {
-      if (!_isFollowing) {
-        await _profileService.unfollowUser(targetId);
+    if (_isFollowing) {
+      setState(() {
+        _isFollowing = false;
+        _followersCount--;
+      });
+      await _profileService.unfollowUser(targetId);
+    } else if (_requestStatus == 'pending') {
+      setState(() {
+        _requestStatus = null;
+      });
+      await _profileService.cancelFollowRequest(targetId);
+    } else {
+      if (isPrivate) {
+        setState(() {
+          _requestStatus = 'pending';
+        });
+        await _profileService.followUser(targetId);
       } else {
+        setState(() {
+          _isFollowing = true;
+          _followersCount++;
+        });
         await _profileService.followUser(targetId);
       }
-    } catch (e) {
-      setState(() {
-        _isFollowing = !_isFollowing;
-        _followersCount += _isFollowing ? 1 : -1;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al procesar seguimiento")));
     }
+    _loadInitialData();
   }
 
   @override
@@ -267,16 +279,21 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           child: ElevatedButton(
                             onPressed: _toggleFollow, 
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _isFollowing 
+                              backgroundColor: (_isFollowing || _requestStatus == 'pending')
                                 ? (theme.brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[200]) 
                                 : const Color(0xFF6C63FF),
-                              foregroundColor: _isFollowing 
+                              foregroundColor: (_isFollowing || _requestStatus == 'pending')
                                 ? (theme.brightness == Brightness.dark ? Colors.white : Colors.black) 
                                 : Colors.white,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                               elevation: 0,
                             ),
-                            child: Text(_isFollowing ? "Siguiendo" : "Seguir", style: const TextStyle(fontWeight: FontWeight.bold)),
+                            child: Text(
+                              _isFollowing 
+                                ? "Siguiendo" 
+                                : (_requestStatus == 'pending' ? "Solicitado" : "Seguir"), 
+                              style: const TextStyle(fontWeight: FontWeight.bold)
+                            ),
                           ),
                         ),
                       ],
@@ -321,7 +338,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               onTap: () {
                                 final int? idNum = int.tryParse(post['id'].toString());
                                 final String code = idNum != null ? ShortcodeUtils.encode(idNum) : post['id'].toString();
-                                Navigator.pushNamed(context, '/post/$code');
+                                Navigator.pushNamed(context, "/post/$code");
                               },
                               child: CachedNetworkImage(
                                 imageUrl: post['image_url'],

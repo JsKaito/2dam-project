@@ -39,7 +39,6 @@ class ProfileService {
 
   Future<Map<String, dynamic>?> enrollMFA() async {
     try {
-      print("Iniciando proceso de inscripción 2FA...");
       final res = await _supabase.auth.mfa.enroll(
         factorType: FactorType.totp,
         issuer: "Artist's Cottage",
@@ -52,7 +51,6 @@ class ProfileService {
       };
     } catch (e) {
       if (e.toString().contains('mfa_factor_name_conflict')) {
-        print("Conflicto detectado. Limpiando factor antiguo...");
         try {
           final factors = await _supabase.auth.mfa.listFactors();
           for (var f in factors.all) {
@@ -61,11 +59,8 @@ class ProfileService {
             }
           }
           return enrollMFA();
-        } catch (inner) {
-          print("Error limpiando conflicto: $inner");
-        }
+        } catch (_) {}
       }
-      print("Error en enrollMFA: $e");
       return null;
     }
   }
@@ -150,20 +145,11 @@ class ProfileService {
       final user = _supabase.auth.currentUser;
       if (user == null) return null;
       final path = 'banners/${user.id}/banner_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      
-      await _supabase.storage.from('posts').uploadBinary(
-        path, 
-        bytes,
-        fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
-      );
-      
+      await _supabase.storage.from('posts').uploadBinary(path, bytes, fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true));
       final url = _supabase.storage.from('posts').getPublicUrl(path);
       await _supabase.from('profiles').update({'banner_url': url}).eq('id', user.id);
       return url;
-    } catch (e) { 
-      print("Error subiendo banner: $e");
-      return null; 
-    }
+    } catch (e) { return null; }
   }
 
   Future<String?> uploadAvatar(Uint8List bytes) async {
@@ -171,20 +157,11 @@ class ProfileService {
       final user = _supabase.auth.currentUser;
       if (user == null) return null;
       final path = 'avatars/${user.id}/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      
-      await _supabase.storage.from('posts').uploadBinary(
-        path, 
-        bytes,
-        fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
-      );
-      
+      await _supabase.storage.from('posts').uploadBinary(path, bytes, fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true));
       final url = _supabase.storage.from('posts').getPublicUrl(path);
       await _supabase.from('profiles').update({'avatar_url': url}).eq('id', user.id);
       return url;
-    } catch (e) { 
-      print("Error subiendo avatar: $e");
-      return null; 
-    }
+    } catch (e) { return null; }
   }
 
   Future<bool> updateProfile({required String username, required String displayName, String? bio, String? avatarUrl, String? bannerUrl}) async {
@@ -212,6 +189,8 @@ class ProfileService {
     } catch (e) { return []; }
   }
 
+  // --- FOLLOW & PRIVACY LOGIC ---
+
   Future<bool> isFollowing(String targetUserId) async {
     try {
       final currentUserId = _supabase.auth.currentUser?.id;
@@ -221,40 +200,104 @@ class ProfileService {
     } catch (e) { return false; }
   }
 
+  Future<String?> getFollowRequestStatus(String targetUserId) async {
+    try {
+      final currentUserId = _supabase.auth.currentUser?.id;
+      if (currentUserId == null) return null;
+      final res = await _supabase.from('follow_requests').select('status').eq('sender_id', currentUserId).eq('receiver_id', targetUserId).maybeSingle();
+      return res?['status'];
+    } catch (e) { return null; }
+  }
+
   Future<void> followUser(String targetUserId) async {
     final currentUserId = _supabase.auth.currentUser?.id;
     if (currentUserId == null) return;
-    await _supabase.from('followers').insert({'follower_id': currentUserId, 'following_id': targetUserId});
+
+    final targetProfile = await getProfileById(targetUserId);
+    final bool isPrivate = targetProfile?['is_private'] ?? false;
+
+    if (isPrivate) {
+      await _supabase.from('follow_requests').upsert({
+        'sender_id': currentUserId,
+        'receiver_id': targetUserId,
+        'status': 'pending'
+      });
+    } else {
+      await _supabase.from('followers').insert({
+        'follower_id': currentUserId,
+        'following_id': targetUserId
+      });
+    }
   }
 
   Future<void> unfollowUser(String targetUserId) async {
     final currentUserId = _supabase.auth.currentUser?.id;
     if (currentUserId == null) return;
     await _supabase.from('followers').delete().eq('follower_id', currentUserId).eq('following_id', targetUserId);
+    await cancelFollowRequest(targetUserId);
   }
+
+  Future<void> cancelFollowRequest(String targetUserId) async {
+    final currentUserId = _supabase.auth.currentUser?.id;
+    if (currentUserId == null) return;
+    await _supabase.from('follow_requests').delete().eq('sender_id', currentUserId).eq('receiver_id', targetUserId);
+  }
+
+  Future<List<Map<String, dynamic>>> getFollowRequests() async {
+    final currentUserId = _supabase.auth.currentUser?.id;
+    if (currentUserId == null) return [];
+    
+    final res = await _supabase
+        .from('follow_requests')
+        .select('*, profiles:sender_id(*)')
+        .eq('receiver_id', currentUserId)
+        .eq('status', 'pending');
+    
+    return List<Map<String, dynamic>>.from(res);
+  }
+
+  Future<void> acceptFollowRequest(String requestId, String senderId) async {
+    final currentUserId = _supabase.auth.currentUser?.id;
+    if (currentUserId == null) return;
+
+    await _supabase.from('followers').insert({
+      'follower_id': senderId,
+      'following_id': currentUserId
+    });
+    await _supabase.from('follow_requests').delete().eq('id', requestId);
+  }
+
+  Future<void> rejectFollowRequest(String requestId) async {
+    await _supabase.from('follow_requests').delete().eq('id', requestId);
+  }
+
+  Stream<int> getFollowRequestsCountStream() {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return Stream.value(0);
+    return _supabase
+        .from('follow_requests')
+        .stream(primaryKey: ['id'])
+        .eq('receiver_id', userId)
+        .map((event) => event.where((e) => e['status'] == 'pending').length);
+  }
+
+  // --- OTROS MÉTODOS ---
 
   Future<bool> sendPasswordResetEmail() async {
     try {
       final user = _supabase.auth.currentUser;
       if (user?.email == null) return false;
-      
-      // Añadimos redirectTo para que el enlace abra la app directamente
-      await _supabase.auth.resetPasswordForEmail(
-        user!.email!,
-        redirectTo: 'io.supabase.artistscottage://login-callback/',
-      );
+      await _supabase.auth.resetPasswordForEmail(user!.email!, redirectTo: 'io.supabase.artistscottage://login-callback/');
       return true;
     } catch (e) { return false; }
   }
 
   Future<void> downloadUserDataReal() async {
     try {
-      if (!kIsWeb) return; // No implementado en móvil por ahora
-      
+      if (!kIsWeb) return;
       final user = _supabase.auth.currentUser;
       final profile = await getCurrentProfile();
       final Map<String, dynamic> data = {"account": {"id": user?.id, "email": user?.email}, "profile": profile};
-      
       final bytes = utf8.encode(jsonEncode(data));
       final blob = html.Blob([bytes]);
       final url = html.Url.createObjectUrlFromBlob(blob);
