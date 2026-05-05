@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:app_links/app_links.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,6 +30,9 @@ void main() async {
   await Supabase.initialize(
     url: 'https://yrbzkgfomjqilmyxzfqe.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlyYnprZ2ZvbWpxaWxteXh6ZnFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMDc4NjAsImV4cCI6MjA5MTY4Mzg2MH0.TAQZz_6shAIiY9FIVYCVk4-2hGtR4pehgIGAA_igxcg',
+    authOptions: FlutterAuthClientOptions(
+      authFlowType: kIsWeb ? AuthFlowType.pkce : AuthFlowType.implicit,
+    ),
   );
 
   final prefs = await SharedPreferences.getInstance();
@@ -130,11 +134,15 @@ class AuthGuardian extends StatefulWidget {
 
 class _AuthGuardianState extends State<AuthGuardian> {
   StreamSubscription? _authSubscription;
+  StreamSubscription<Uri>? _linkSubscription;
+  late final AppLinks _appLinks;
   bool _isRecovering = false;
 
   @override
   void initState() {
     super.initState();
+    _appLinks = AppLinks();
+    _initDeepLinks();
     _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((state) {
       if (state.event == AuthChangeEvent.passwordRecovery) {
         setState(() => _isRecovering = true);
@@ -144,8 +152,73 @@ class _AuthGuardianState extends State<AuthGuardian> {
 
   @override
   void dispose() {
+    _linkSubscription?.cancel();
     _authSubscription?.cancel();
     super.dispose();
+  }
+
+  Future<void> _initDeepLinks() async {
+    final Uri? initialUri = await _appLinks.getInitialLink();
+    if (initialUri != null) {
+      await _handleIncomingLink(initialUri);
+    }
+
+    _linkSubscription = _appLinks.uriLinkStream.listen((uri) {
+      _handleIncomingLink(uri);
+    }, onError: (error) {
+      debugPrint('Deep link stream error: $error');
+    });
+  }
+
+  Future<void> _handleIncomingLink(Uri uri) async {
+    if (uri.scheme != 'io.supabase.artistscottage') return;
+
+    final params = _extractAuthParams(uri);
+    final isRecovery = params['type'] == 'recovery';
+
+    try {
+      await Supabase.instance.client.auth.getSessionFromUrl(uri);
+    } catch (e) {
+      final refreshToken = params['refresh_token'];
+      final accessToken = params['access_token'];
+      if (refreshToken != null && refreshToken.isNotEmpty) {
+        try {
+          await Supabase.instance.client.auth.setSession(
+            refreshToken,
+            accessToken: accessToken,
+          );
+        } catch (inner) {
+          debugPrint('Manual session restore failed: $inner');
+        }
+      } else {
+        debugPrint('Deep link handling failed: $e');
+      }
+    }
+
+    if (!mounted) return;
+    if (isRecovery) {
+      setState(() => _isRecovering = true);
+      navigatorKey.currentState?.pushNamedAndRemoveUntil('/reset-password', (route) => false);
+    }
+  }
+
+  Map<String, String> _extractAuthParams(Uri uri) {
+    final params = <String, String>{}..addAll(uri.queryParameters);
+    if (uri.fragment.isNotEmpty) {
+      try {
+        var fragment = uri.fragment;
+        if (fragment.startsWith('?') || fragment.startsWith('#')) {
+          fragment = fragment.substring(1);
+        }
+        if (fragment.startsWith('/')) {
+          fragment = fragment.substring(1);
+        }
+        if (fragment.isNotEmpty) {
+          params.addAll(Uri.splitQueryString(fragment));
+        }
+      } catch (_) {}
+    }
+    return params;
   }
 
   @override
