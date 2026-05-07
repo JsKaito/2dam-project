@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:intl/intl.dart';
 import '../services/notification_service.dart';
 import '../services/profile_service.dart';
@@ -45,12 +46,69 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return const Icon(Icons.favorite, color: Colors.redAccent, size: 12);
       case 'comment':
       case 'reply':
+      case 'mention':
         return const Icon(Icons.chat_bubble_rounded, color: Color(0xFF6C63FF), size: 12);
       case 'follow':
         return const Icon(Icons.person_add_rounded, color: Colors.blueAccent, size: 12);
+      case 'verification':
+        return const Icon(Icons.verified, color: Colors.green, size: 12);
       default:
         return const Icon(Icons.notifications, color: Colors.amber, size: 12);
     }
+  }
+
+  void _openUserProfile(String? username) {
+    if (username == null || username.isEmpty) return;
+    Navigator.pushNamed(context, "/user/$username");
+  }
+
+  void _openPost(String? postId, {bool focusComments = false, String? commentId}) {
+    if (postId == null || postId.toString().isEmpty) return;
+    Navigator.pushNamed(
+      context,
+      "/post/$postId",
+      arguments: {
+        'focusComments': focusComments,
+        'commentId': commentId,
+      },
+    );
+  }
+
+  void _handleNotificationTap(Map<String, dynamic> notif) {
+    final type = notif['type'] ?? '';
+    final sender = notif['sender_profile'];
+    _notificationService.markAsRead(notif['id']);
+
+    if (type == 'follow') {
+      _openUserProfile(sender?['username']);
+      return;
+    }
+
+    if (type == 'comment' || type == 'reply' || type == 'mention') {
+      _openPost(
+        notif['post_id']?.toString(),
+        focusComments: true,
+        commentId: notif['comment_id']?.toString(),
+      );
+      return;
+    }
+
+    if (type == 'like') {
+      _openPost(notif['post_id']?.toString());
+      return;
+    }
+
+    if (type == 'verification') {
+      Navigator.pushNamed(context, '/profile');
+      return;
+    }
+
+    if (notif['post_id'] != null) {
+      _openPost(notif['post_id']?.toString());
+      return;
+    }
+
+    _openUserProfile(sender?['username']);
   }
 
   @override
@@ -198,6 +256,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             final sender = notif['sender_profile'];
                             final bool isRead = notif['is_read'] ?? false;
                             final type = notif['type'] ?? '';
+                            final bool isVerification = type == 'verification';
 
                             String message = "";
                             switch (type) {
@@ -205,8 +264,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               case 'comment': message = "comentó tu publicación."; break;
                               case 'follow': message = "ha empezado a seguirte."; break;
                               case 'reply': message = "respondió a tu comentario."; break;
+                              case 'mention': message = "te mencionó en un comentario."; break;
+                              case 'verification': message = "tu cuenta ha sido verificada."; break;
                               default: message = "interactuó contigo.";
                             }
+
+                            final String displayName = isVerification
+                              ? "Artist's Cottage"
+                              : (sender?['username'] ?? 'Alguien');
 
                             return AnimatedContainer(
                               duration: const Duration(milliseconds: 300),
@@ -218,14 +283,26 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                                 leading: Stack(
                                   children: [
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        border: Border.all(color: const Color(0xFF6C63FF).withOpacity(0.2), width: 2),
-                                      ),
-                                      child: CircleAvatar(
-                                        radius: 28,
-                                        backgroundImage: NetworkImage(sender?['avatar_url'] ?? ProfileService.defaultAvatarUrl),
+                                    GestureDetector(
+                                      onTap: isVerification
+                                        ? null
+                                        : () {
+                                            _notificationService.markAsRead(notif['id']);
+                                            _openUserProfile(sender?['username']);
+                                          },
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: const Color(0xFF6C63FF).withOpacity(0.2), width: 2),
+                                        ),
+                                        child: CircleAvatar(
+                                          radius: 28,
+                                          backgroundColor: isVerification ? const Color(0xFF6C63FF) : null,
+                                          backgroundImage: isVerification
+                                            ? null
+                                            : NetworkImage(sender?['avatar_url'] ?? ProfileService.defaultAvatarUrl),
+                                          child: isVerification ? const Icon(Icons.verified, color: Colors.white, size: 24) : null,
+                                        ),
                                       ),
                                     ),
                                     Positioned(
@@ -249,7 +326,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                   text: TextSpan(
                                     style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontSize: 14.5, height: 1.3),
                                     children: [
-                                      TextSpan(text: "${sender?['username'] ?? 'Alguien'} ", style: const TextStyle(fontWeight: FontWeight.w900)),
+                                      TextSpan(
+                                        text: "$displayName ",
+                                        style: const TextStyle(fontWeight: FontWeight.w900),
+                                        recognizer: isVerification
+                                          ? null
+                                          : (TapGestureRecognizer()..onTap = () {
+                                              _notificationService.markAsRead(notif['id']);
+                                              _openUserProfile(sender?['username']);
+                                            }),
+                                      ),
                                       TextSpan(text: message, style: const TextStyle(fontWeight: FontWeight.w400)),
                                     ],
                                   ),
@@ -261,14 +347,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     style: TextStyle(fontSize: 11, color: theme.hintColor),
                                   ),
                                 ),
-                                onTap: () {
-                                  _notificationService.markAsRead(notif['id']);
-                                  if (notif['post_id'] != null) {
-                                    Navigator.pushNamed(context, "/post/${notif['post_id']}");
-                                  } else if (type == 'follow') {
-                                    Navigator.pushNamed(context, "/user/${sender?['username']}");
-                                  }
-                                },
+                                onTap: () => _handleNotificationTap(notif),
                               ),
                             );
                           },

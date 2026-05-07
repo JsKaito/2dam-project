@@ -132,11 +132,16 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
     }
 
     if (index != _currentIndex) {
-      _pageController.animateToPage(
-        index,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+      final int delta = (index - _currentIndex).abs();
+      if (delta > 1) {
+        _pageController.jumpToPage(index);
+      } else {
+        _pageController.animateToPage(
+          index,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
       setState(() {
         _currentIndex = index;
       });

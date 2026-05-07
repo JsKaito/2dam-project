@@ -111,6 +111,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   : Center(
                       child: GestureDetector(
                         onTap: () async {
+                          final bool confirm = await showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text("Eliminar cuenta guardada"),
+                              content: const Text("Se quitará esta cuenta de la lista. No se eliminará de Supabase."),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text("Eliminar", style: TextStyle(color: Colors.redAccent)),
+                                ),
+                              ],
+                            ),
+                          ) ?? false;
+
+                          if (!confirm) return;
+
                           await _authService.removeAccount(acc['id']);
                           final updated = await _authService.getSavedAccounts();
                           setPanelState(() => _savedAccounts = updated);

@@ -11,8 +11,16 @@ import 'package:flutter/services.dart';
 class PostDetailsScreen extends StatefulWidget {
   final String postId;
   final VoidCallback? onBack;
+  final bool focusComments;
+  final String? focusCommentId;
 
-  const PostDetailsScreen({super.key, required this.postId, this.onBack});
+  const PostDetailsScreen({
+    super.key,
+    required this.postId,
+    this.onBack,
+    this.focusComments = false,
+    this.focusCommentId,
+  });
 
   @override
   State<PostDetailsScreen> createState() => _PostDetailsScreenState();
@@ -22,6 +30,8 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
   final PostService _postService = PostService();
   final ProfileService _profileService = ProfileService();
   final TextEditingController _commentController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _commentsKey = GlobalKey();
   StreamSubscription? _updateSubscription;
   
   Map<String, dynamic>? _post;
@@ -31,6 +41,7 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
   String? _replyingToId;
   String? _replyingToName;
   String? _rootParentId;
+  bool _didAutoScroll = false;
 
   @override
   void initState() {
@@ -62,7 +73,23 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
   void dispose() {
     _updateSubscription?.cancel();
     _commentController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _maybeScrollToComments() {
+    if (!widget.focusComments || _didAutoScroll) return;
+    _didAutoScroll = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _commentsKey.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
   }
 
   Future<void> _loadData() async {
@@ -98,6 +125,7 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
           _isFollowing = following;
           _isLoading = false;
         });
+        _maybeScrollToComments();
       }
     } else if (mounted) {
       setState(() => _isLoading = false);
@@ -306,6 +334,7 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
         children: [
           Expanded(
             child: SingleChildScrollView(
+              controller: _scrollController,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -418,6 +447,7 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
                   
                   const Divider(),
                   Padding(
+                    key: _commentsKey,
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                     child: Text("COMENTARIOS (${_comments.length})", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
                   ),
@@ -483,52 +513,59 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
     final String commentId = comment['id'].toString();
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
     final bool isMyComment = comment['user_id'] == currentUserId;
+    final bool isFocused = widget.focusCommentId != null && widget.focusCommentId == commentId;
+    final highlightColor = Theme.of(context).brightness == Brightness.dark
+      ? Colors.white.withOpacity(0.04)
+      : Colors.black.withOpacity(0.03);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(radius: 14, backgroundImage: NetworkImage(cProfile?['avatar_url'] ?? ProfileService.defaultAvatarUrl)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(cProfile?['username'] ?? "user", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                Text(comment['content'], style: const TextStyle(fontSize: 13)),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => setState(() { _replyingToId = commentId; _replyingToName = cProfile?['username']; _rootParentId = isMain ? commentId : rootId; }),
-                      child: const Text("Responder", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
-                    ),
-                    if (isMyComment) ...[
-                      const SizedBox(width: 16),
+    return Container(
+      color: isFocused ? highlightColor : Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(radius: 14, backgroundImage: NetworkImage(cProfile?['avatar_url'] ?? ProfileService.defaultAvatarUrl)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(cProfile?['username'] ?? "user", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text(comment['content'], style: const TextStyle(fontSize: 13)),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
                       GestureDetector(
-                        onTap: () => _deleteComment(commentId),
-                        child: const Text("Eliminar", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                        onTap: () => setState(() { _replyingToId = commentId; _replyingToName = cProfile?['username']; _rootParentId = isMain ? commentId : rootId; }),
+                        child: const Text("Responder", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
                       ),
+                      if (isMyComment) ...[
+                        const SizedBox(width: 16),
+                        GestureDetector(
+                          onTap: () => _deleteComment(commentId),
+                          child: const Text("Eliminar", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              children: [
+                IconButton(
+                  icon: Icon(comment['is_liked'] ? Icons.favorite : Icons.favorite_border, size: 14), 
+                  color: comment['is_liked'] ? Colors.red : Colors.grey, 
+                  onPressed: () => _handleCommentLike(comment),
+                  constraints: const BoxConstraints(),
+                  padding: EdgeInsets.zero,
                 ),
+                Text("${comment['likes_count'] ?? 0}", style: const TextStyle(fontSize: 10, color: Colors.grey)),
               ],
             ),
-          ),
-          Column(
-            children: [
-              IconButton(
-                icon: Icon(comment['is_liked'] ? Icons.favorite : Icons.favorite_border, size: 14), 
-                color: comment['is_liked'] ? Colors.red : Colors.grey, 
-                onPressed: () => _handleCommentLike(comment),
-                constraints: const BoxConstraints(),
-                padding: EdgeInsets.zero,
-              ),
-              Text("${comment['likes_count'] ?? 0}", style: const TextStyle(fontSize: 10, color: Colors.grey)),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

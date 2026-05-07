@@ -73,10 +73,23 @@ class MyApp extends StatelessWidget {
             if (name.startsWith('/post/')) {
               final rawId = name.replaceFirst('/post/', '');
               final String finalPostId = ShortcodeUtils.parseId(rawId).toString();
+              final args = settings.arguments;
+              bool focusComments = false;
+              String? commentId;
+              if (args is Map) {
+                focusComments = args['focusComments'] == true;
+                commentId = args['commentId']?.toString();
+              }
               
               return MaterialPageRoute(
                 settings: settings,
-                builder: (_) => NavigationWrapper(content: PostDetailsScreen(postId: finalPostId)),
+                builder: (_) => NavigationWrapper(
+                  content: PostDetailsScreen(
+                    postId: finalPostId,
+                    focusComments: focusComments,
+                    focusCommentId: commentId,
+                  ),
+                ),
               );
             }
 
