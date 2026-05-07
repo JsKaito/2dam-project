@@ -77,7 +77,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   Future<void> _uploadPost() async {
     if (_selectedImage == null || _titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Por favor, añade un título y una imagen"))
+        const SnackBar(content: Text("Agrega un titulo y una imagen"))
       );
       return;
     }
@@ -114,19 +114,19 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                _selectedImage = null;
                _captureDate = null;
              });
-             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("¡Obra publicada con éxito!")));
+             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Publicacion creada")));
           } else {
             Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("¡Obra publicada con éxito!")));
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Publicacion creada")));
           }
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al publicar")));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No pudimos publicar la obra. Intentalo de nuevo.")));
         }
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isUploading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No pudimos publicar la obra. Intentalo de nuevo.")));
       }
     }
   }

@@ -11,6 +11,19 @@ class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
   static const String _accountsKey = 'saved_accounts';
 
+  String _friendlyAuthMessage(String message) {
+    final lower = message.toLowerCase();
+    if (lower.contains('rate limit')) return "Demasiados intentos. Espera un momento.";
+    if (lower.contains('invalid login credentials')) return "Correo o contrasena incorrectos.";
+    if (lower.contains('email not confirmed')) return "Confirma tu correo para continuar.";
+    if (lower.contains('already registered') || lower.contains('user already registered')) {
+      return "Este correo ya esta registrado.";
+    }
+    if (lower.contains('password') && lower.contains('short')) return "La contrasena no cumple los requisitos.";
+    if (lower.contains('email') && lower.contains('invalid')) return "El correo no es valido.";
+    return "No pudimos completar la operacion. Intentalo de nuevo.";
+  }
+
   Future<dynamic> register(String email, String password, String username) async {
     try {
       final response = await _supabase.auth.signUp(
@@ -21,12 +34,9 @@ class AuthService {
       );
       return response.user != null;
     } on AuthException catch (e) {
-      if (e.message.contains("rate limit exceeded")) {
-        return "Demasiados intentos. Por favor, espera un momento.";
-      }
-      return e.message;
+      return _friendlyAuthMessage(e.message);
     } catch (e) {
-      return "Error inesperado al registrar.";
+      return "No pudimos crear tu cuenta. Intentalo de nuevo.";
     }
   }
 
@@ -52,9 +62,9 @@ class AuthService {
       return false;
     } on AuthException catch (e) {
       if (e.message.toLowerCase().contains("mfa")) return "mfa_required";
-      return e.message;
+      return _friendlyAuthMessage(e.message);
     } catch (e) {
-      return "Error de conexión: $e";
+      return "No pudimos iniciar sesion. Intentalo de nuevo.";
     }
   }
 
@@ -67,9 +77,9 @@ class AuthService {
       );
       return true;
     } on AuthException catch (e) {
-      return e.message;
+      return _friendlyAuthMessage(e.message);
     } catch (e) {
-      return "Error inesperado.";
+      return "No pudimos enviar el correo. Intentalo de nuevo.";
     }
   }
 

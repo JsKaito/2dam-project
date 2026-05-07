@@ -128,7 +128,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             tooltip: "Marcar todas como leídas",
             onPressed: () async {
               await _notificationService.markAllAsRead();
-              if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Notificaciones leídas")));
+              if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Todo al dia")));
             },
           ),
           const SizedBox(width: 8),

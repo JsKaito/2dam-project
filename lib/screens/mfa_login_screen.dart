@@ -25,7 +25,7 @@ class _MFALoginScreenState extends State<MFALoginScreen> {
         Navigator.pushReplacementNamed(context, '/home');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Código incorrecto o expirado")),
+          const SnackBar(content: Text("Codigo incorrecto. Intentalo de nuevo.")),
         );
       }
     }

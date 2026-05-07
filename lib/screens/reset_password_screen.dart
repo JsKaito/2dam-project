@@ -57,7 +57,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     if (!meetsRules) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("La contraseña debe tener 6+ caracteres, una mayúscula, un número y un símbolo"),
+          content: Text("La contrasena debe tener al menos 6 caracteres, una mayuscula, un numero y un simbolo"),
         ),
       );
       return;
@@ -65,7 +65,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
     if (pass != confirm) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Las contraseñas no coinciden")),
+        const SnackBar(content: Text("Las contrasenas no coinciden")),
       );
       return;
     }
@@ -77,14 +77,14 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Contraseña actualizada con éxito")),
+          const SnackBar(content: Text("Contrasena actualizada")),
         );
         Navigator.pushReplacementNamed(context, '/home');
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al actualizar: $e")),
+          const SnackBar(content: Text("No pudimos actualizar la contrasena. Intentalo de nuevo.")),
         );
       }
     } finally {

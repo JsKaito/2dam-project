@@ -65,13 +65,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
         if (newUrl == null && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Error al subir la imagen. Revisa los permisos del Storage.")),
+            const SnackBar(content: Text("No pudimos subir la imagen. Intentalo de nuevo.")),
           );
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Error: $e")),
+            const SnackBar(content: Text("No pudimos actualizar la imagen.")),
           );
         }
       } finally {
@@ -94,7 +94,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         Navigator.pop(context);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Error al guardar los cambios")),
+          const SnackBar(content: Text("No pudimos guardar los cambios")),
         );
       }
     }

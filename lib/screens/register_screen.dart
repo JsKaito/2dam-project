@@ -120,7 +120,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (result == true) {
         _showSuccessDialog();
       } else {
-        String errorMessage = "Error al registrar. Verifica los datos.";
+        String errorMessage = "No pudimos crear la cuenta. Revisa los datos e intentalo de nuevo.";
         if (result is String) {
           errorMessage = result;
         }

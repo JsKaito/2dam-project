@@ -115,7 +115,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             context: context,
                             builder: (context) => AlertDialog(
                               title: const Text("Eliminar cuenta guardada"),
-                              content: const Text("Se quitará esta cuenta de la lista. No se eliminará de Supabase."),
+                              content: const Text("Se quitara de esta lista en este dispositivo. La cuenta seguira activa."),
                               actions: [
                                 TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
                                 TextButton(
@@ -147,7 +147,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 } else {
                   if (mounted) {
                     setState(() => _isLoading = false);
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al cambiar cuenta")));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No pudimos cambiar de cuenta. Intentalo de nuevo.")));
                   }
                 }
               },
@@ -208,7 +208,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _isLoading = false);
 
     if (data == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al conectar con Supabase")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se pudo conectar. Intentalo de nuevo.")));
       return;
     }
 
@@ -252,7 +252,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: const Icon(Icons.copy, size: 18, color: Colors.grey),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: secret));
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Código copiado")));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Codigo copiado")));
                   },
                 )
               ],
@@ -280,9 +280,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   setState(() => _mfaEnabled = true);
                   Navigator.pop(context); 
                   Navigator.pop(context); 
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("2FA Activado correctamente")));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Verificacion en dos pasos activada")));
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Código incorrecto")));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Codigo incorrecto. Intentalo de nuevo.")));
                 }
               },
               child: const Text("VERIFICAR Y ACTIVAR", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -329,10 +329,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     setState(() => _mfaEnabled = false);
                     Navigator.pop(context); 
                     Navigator.pop(context); 
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("2FA Desactivado")));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Verificacion en dos pasos desactivada")));
                   }
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Código incorrecto")));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Codigo incorrecto. Intentalo de nuevo.")));
                 }
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
@@ -462,7 +462,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             await _profileService.logoutOthers();
             if (mounted) {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Otras sesiones cerradas correctamente")));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Se cerraron las otras sesiones")));
             }
           }),
         ],
@@ -474,14 +474,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final success = await _profileService.sendPasswordResetEmail();
     if (mounted) {
       Navigator.pop(context);
-      if (success) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Email enviado")));
-      else ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al enviar")));
+      if (success) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Correo enviado")));
+      else ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No pudimos enviar el correo")));
     }
   }
 
   void _confirmDelete() {
     int sec = 10;
     Timer? t;
+    bool isDeleting = false;
     showDialog(context: context, barrierDismissible: false, builder: (context) => StatefulBuilder(builder: (context, setD) {
       t ??= Timer.periodic(const Duration(seconds: 1), (timer) {
         if (sec > 0 && mounted) setD(() => sec--);
@@ -489,17 +490,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
       return AlertDialog(
         backgroundColor: Theme.of(context).cardColor,
-        title: const Text("⚠️ ELIMINACIÓN REAL", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-        content: Text("Confirmar en $sec segundos. Esta acción borrará TODO de Supabase."),
+        title: const Text("⚠️ ELIMINACION DEFINITIVA", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+        content: Text("Confirmar en $sec segundos. Esta accion eliminara tu cuenta y todo tu contenido."),
         actions: [
           TextButton(onPressed: () { t?.cancel(); Navigator.pop(context); }, child: const Text("CANCELAR")),
           ElevatedButton(
-            onPressed: sec > 0 ? null : () async {
+            onPressed: (sec > 0 || isDeleting) ? null : () async {
+              setD(() => isDeleting = true);
               final ok = await _profileService.deleteAccount();
-              if (ok) Navigator.pushNamedAndRemoveUntil(context, '/login', (r) => false);
+              if (!mounted) return;
+              if (ok) {
+                Navigator.pushNamedAndRemoveUntil(context, '/login', (r) => false);
+              } else {
+                setD(() => isDeleting = false);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No pudimos eliminar la cuenta. Intentalo de nuevo.")));
+              }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            child: Text(sec > 0 ? "ESPERA ($sec)" : "ELIMINAR AHORA"),
+            child: isDeleting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(sec > 0 ? "ESPERA ($sec)" : "ELIMINAR CUENTA"),
           ),
         ],
       );
@@ -574,7 +582,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ]),
           _buildGroup("Datos", [
             _buildTile(Icons.download, "Descargar mis datos", () async {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Iniciando descarga...")));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Preparando la descarga...")));
               await _profileService.downloadUserDataReal();
             }),
           ]),

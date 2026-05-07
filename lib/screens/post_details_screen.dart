@@ -178,7 +178,7 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
       await Clipboard.setData(ClipboardData(text: text));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Enlace del post copiado"))
+          const SnackBar(content: Text("Enlace copiado"))
         );
       }
     }
@@ -206,7 +206,7 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text("Obra eliminada correctamente"), 
+              content: Text("Publicacion eliminada"), 
               backgroundColor: Color(0xFF6C63FF),
               behavior: SnackBarBehavior.floating,
             )
@@ -216,7 +216,7 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Error al eliminar la obra"),
+            content: Text("No pudimos eliminar la publicacion"),
             backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
           )
@@ -268,7 +268,7 @@ class _PostDetailsScreenState extends State<PostDetailsScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Error: No se pudo eliminar el comentario."),
+            content: Text("No pudimos eliminar el comentario"),
             backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
           )

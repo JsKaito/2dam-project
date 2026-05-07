@@ -33,7 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(response is String ? response : "Error desconocido"),
+              content: Text(response is String ? response : "No pudimos iniciar sesion."),
               backgroundColor: Colors.redAccent,
             ),
           );
@@ -43,7 +43,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.redAccent),
+          const SnackBar(content: Text("No pudimos iniciar sesion. Intentalo de nuevo."), backgroundColor: Colors.redAccent),
         );
       }
     }
@@ -53,7 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Introduce tu email para restablecer la contraseña")),
+        const SnackBar(content: Text("Escribe tu correo para restablecer la contrasena")),
       );
       return;
     }
@@ -76,7 +76,10 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $result"), backgroundColor: Colors.redAccent),
+          SnackBar(
+            content: Text(result is String ? result : "No pudimos enviar el correo. Intentalo de nuevo."),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     }

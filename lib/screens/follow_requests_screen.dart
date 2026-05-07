@@ -45,7 +45,7 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen> {
         _loadRequests();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Error al aceptar la solicitud.")),
+          const SnackBar(content: Text("No pudimos aceptar la solicitud. Intentalo de nuevo.")),
         );
       }
     }

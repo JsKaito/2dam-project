@@ -132,7 +132,7 @@ class _PostCardState extends State<PostCard> {
       await Clipboard.setData(ClipboardData(text: text));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Enlace del post copiado"))
+          const SnackBar(content: Text("Enlace copiado"))
         );
       }
     }

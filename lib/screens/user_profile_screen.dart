@@ -81,7 +81,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final isPrivate = _profile!['is_private'] ?? false;
     if (isPrivate && !_isFollowing) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Esta cuenta es privada. Sigue al artista para ver su lista."))
+        const SnackBar(content: Text("Esta cuenta es privada. Sigue a la cuenta para ver su lista."))
       );
       return;
     }
